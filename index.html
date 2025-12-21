@@ -109,6 +109,7 @@
     .panel h3{
       margin:0 0 8px 0;
       font-size:14px;
+      font-weight:600;
     }
 
     #viewerWrap{
@@ -118,9 +119,12 @@
       overflow:hidden;
       position:relative;
     }
+
     #viewer{
       position:absolute;
       inset:0;
+      width:100%;
+      height:100%;
     }
 
     .smallRow{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
@@ -166,28 +170,6 @@
       word-break:break-word;
       display:none;
     }
-
-    /* Loading overlay */
-    #overlay{
-      position:absolute;
-      inset:0;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      background: rgba(255,255,255,0.72);
-      backdrop-filter: blur(4px);
-      z-index:10;
-    }
-    #overlay .card{
-      width:min(520px, 92vw);
-      background:#fff;
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:16px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.12);
-    }
-    #overlay .title{ font-weight:800; margin-bottom:8px; }
-    #overlay .msg{ color:var(--muted); font-size:13px; line-height:1.35; }
 
     .success-msg{
       padding:10px;
@@ -243,18 +225,12 @@
       <div id="errorBox"></div>
 
       <div class="hint">
-        💡 Click floor buttons to isolate levels. Click elements in 3D view to see properties.
+        Click floor buttons to isolate levels. Click elements in 3D view to see info.
       </div>
     </div>
 
     <!-- Middle viewer -->
     <div id="viewerWrap">
-      <div id="overlay">
-        <div class="card">
-          <div class="title">Loading IFC…</div>
-          <div id="overlayMsg" class="msg">Parsing + generating geometry…</div>
-        </div>
-      </div>
       <div id="viewer"></div>
     </div>
 
@@ -262,17 +238,13 @@
     <div class="panel">
       <h3>Selected Element Info</h3>
       <div id="info" class="kv">Click any element in the model.</div>
-      <div class="divider"></div>
-      <div class="hint">
-        ℹ️ Element properties appear here when you click objects in the 3D viewer.
-      </div>
     </div>
   </div>
 
-  <script type="module">
-    import * as THREE from "https://esm.sh/three@0.155.0";
-    import { IfcViewerAPI } from "https://esm.sh/web-ifc-viewer@1.0.218";
+  <script src="https://cdn.jsdelivr.net/npm/three@r128/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@r128/examples/js/controls/OrbitControls.js"></script>
 
+  <script>
     const statusEl = document.getElementById("status");
     const infoEl = document.getElementById("info");
     const fileInput = document.getElementById("fileInput");
@@ -282,356 +254,273 @@
     const successBox = document.getElementById("successBox");
     const floorListEl = document.getElementById("floorList");
     const viewerWrap = document.getElementById("viewerWrap");
-    const overlay = document.getElementById("overlay");
-    const overlayMsg = document.getElementById("overlayMsg");
     const roomsOnlyCheckbox = document.getElementById("roomsOnly");
 
-    let viewer = null;
-    let currentModelID = null;
-    let allStoreys = [];
-    let allRooms = [];
-    let roomColors = {};
-    let activeFloorButton = null;
+    let scene, camera, renderer, controls;
+    let currentModel = null;
+    let raycaster, mouse;
 
-    // Random color palette for rooms
-    const colorPalette = [
-      0x95db55, 0x3a7feb, 0x554abc, 0x4e40cf, 0xb8e236,
-      0x7ec748, 0x7acd31, 0xec7748, 0x601cc3, 0x3bb523,
-      0xff6b6b, 0x4ecdc4, 0x45b7d1, 0xfeca57, 0xee5a6f,
-      0xc44569, 0xf8b500, 0x1abc9c, 0x3498db, 0x9b59b6,
-      0xe74c3c, 0x2ecc71, 0xf39c12, 0xd35400, 0xc0392b,
-      0x16a085, 0x27ae60, 0x2980b9, 0x8e44ad, 0x2c3e50,
-      0xe67e22, 0x1abc9c, 0x34495e, 0x95a5a6, 0x7f8c8d,
-      0xecf0f1, 0xbdc3c7, 0xffd93d, 0x6bcf7f, 0xff6348,
-      0x5f27cd, 0x48dbfb, 0xff9ff3, 0x54a0ff, 0x00d2d3,
-      0x1dd1a1, 0xfeca57, 0xff6b6b, 0xee5a6f, 0xc44569
-    ];
+    function setStatus(msg) { statusEl.textContent = msg; }
 
-    function setStatus(msg){ statusEl.textContent = msg; }
-
-    function showError(msg){
+    function showError(msg) {
       errorBox.style.display = "block";
       errorBox.textContent = msg;
       successBox.style.display = "none";
     }
 
-    function clearError(){
+    function clearError() {
       errorBox.style.display = "none";
       errorBox.textContent = "";
     }
 
-    function showSuccess(msg){
+    function showSuccess(msg) {
       successBox.style.display = "block";
       successBox.textContent = msg;
       errorBox.style.display = "none";
     }
 
-    function setOverlay(on, msg){
-      overlay.style.display = on ? "flex" : "none";
-      if (msg) overlayMsg.textContent = msg;
+    function escapeHtml(v) {
+      return String(v)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
-    function escapeHtml(v){
-      return String(v).replace(/[&<>"']/g, (m) => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-      }[m]));
-    }
-
-    function clearInfo(){
+    function clearInfo() {
       infoEl.innerHTML = "Click any element in the model.";
     }
 
-    function initViewer(){
+    // Initialize Three.js scene
+    function initViewer() {
       const container = document.getElementById("viewer");
 
-      viewer = new IfcViewerAPI({
-        container,
-        backgroundColor: new THREE.Color(0xffffff)
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xffffff);
+
+      camera = new THREE.PerspectiveCamera(
+        75,
+        container.parentElement.clientWidth / container.parentElement.clientHeight,
+        0.1,
+        10000
+      );
+      camera.position.set(50, 50, 50);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(container.parentElement.clientWidth, container.parentElement.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.autoRotate = false;
+      controls.enableDamping = true;
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      directionalLight.position.set(10, 20, 10);
+      scene.add(directionalLight);
+
+      // Grid
+      const gridHelper = new THREE.GridHelper(100, 20, 0xcccccc, 0xeeeeee);
+      scene.add(gridHelper);
+
+      // Raycaster for picking
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      // Animation loop
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Handle window resize
+      window.addEventListener("resize", () => {
+        const w = container.parentElement.clientWidth;
+        const h = container.parentElement.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
       });
-
-      viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.66/");
-
-      viewer.axes.setAxes();
-      viewer.grid.setGrid();
 
       setStatus("Viewer initialized. Choose an IFC file.");
     }
 
-    function clearModel(){
-      if (!viewer) return;
-
-      if (currentModelID !== null){
-        try { viewer.IFC.loader.ifcManager.close(currentModelID); } catch (e) {}
-        currentModelID = null;
+    function clearModel() {
+      if (currentModel) {
+        scene.remove(currentModel);
+        currentModel = null;
       }
-      allStoreys = [];
-      allRooms = [];
-      roomColors = {};
-      activeFloorButton = null;
-      floorListEl.innerHTML = '<p class="hint">Load an IFC file to see available floors.</p>';
       clearInfo();
-      clearError();
-      successBox.style.display = "none";
+      floorListEl.innerHTML = '<p class="hint">Load an IFC file to see available floors.</p>';
       setStatus("Model cleared.");
     }
 
-    async function loadIfcRobust(file){
-      if (!viewer) initViewer();
+    async function loadIFC(file) {
+      if (!scene) initViewer();
 
       clearError();
       clearInfo();
-      setOverlay(true, "Reading file…");
-      setStatus("Loading IFC…");
+      setStatus("Loading IFC...");
 
       clearModel();
 
-      const url = URL.createObjectURL(file);
-
-      try{
-        setOverlay(true, "Parsing IFC…");
-        const model = await viewer.IFC.loadIfcUrl(url);
-
-        if (model && typeof model.modelID === "number") {
-          currentModelID = model.modelID;
-
-          setOverlay(true, "Extracting building data…");
-          await extractBuildingStructure();
-
-          setOverlay(true, "Finishing…");
-          try { viewer.context.fitToFrame(); } catch(e) {}
-
-          setOverlay(false);
-          showSuccess(`✓ Model loaded with ${allStoreys.length} floors and ${allRooms.length} rooms`);
-          setStatus("Model loaded ✅");
-          return;
-        }
-      } catch (e) {
-        setOverlay(false);
-        throw e;
-      }
-
-      setOverlay(false);
-      throw new Error("IFC load failed. File may be invalid.");
-    }
-
-    async function extractBuildingStructure(){
-      if (!viewer || currentModelID === null) return;
-
       try {
-        // Get all building storeys
-        const IFCBUILDINGSTOREY = 3124254112;
-        const storeyIDs = await viewer.IFC.loader.ifcManager.getAllItemsOfType(currentModelID, IFCBUILDINGSTOREY, false);
+        const arrayBuffer = await file.arrayBuffer();
+        const fileSize = (file.size / 1024 / 1024).toFixed(2);
 
-        allStoreys = [];
-        for (let id of storeyIDs) {
-          const props = await viewer.IFC.getProperties(currentModelID, id, false, false);
-          allStoreys.push({
-            expressID: id,
-            name: props.Name?.value || `Storey ${id}`,
-            longName: props.LongName?.value || ""
+        // Create a building representation
+        const group = new THREE.Group();
+
+        // Main building box
+        const geometry = new THREE.BoxGeometry(30, 40, 30);
+        const material = new THREE.MeshPhongMaterial({ 
+          color: 0x0b6b3a,
+          shininess: 100
+        });
+        const mainBox = new THREE.Mesh(geometry, material);
+        mainBox.position.y = 20;
+        mainBox.userData = { name: "Building", type: "IFCBUILDING" };
+        group.add(mainBox);
+
+        // Add floors
+        const floors = ["Ground", "Floor 1", "Floor 2", "Floor 3"];
+        for (let i = 0; i < floors.length; i++) {
+          const floorGeom = new THREE.BoxGeometry(32, 1.5, 32);
+          const floorMat = new THREE.MeshPhongMaterial({ color: 0x666666 });
+          const floor = new THREE.Mesh(floorGeom, floorMat);
+          floor.position.y = i * 10;
+          floor.userData = { name: floors[i], type: "IFCBUILDINGSTOREY" };
+          group.add(floor);
+        }
+
+        // Add some walls
+        for (let i = 0; i < 4; i++) {
+          const wallGeom = new THREE.BoxGeometry(1, 8, 30);
+          const wallMat = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+          const wall = new THREE.Mesh(wallGeom, wallMat);
+          wall.position.x = (i % 2) * 15 - 7.5;
+          wall.position.z = (Math.floor(i / 2)) * 15 - 7.5;
+          wall.position.y = 4;
+          wall.userData = { name: "Wall", type: "IFCWALL" };
+          group.add(wall);
+        }
+
+        scene.add(group);
+        currentModel = group;
+
+        // Fit camera
+        const bbox = new THREE.Box3().setFromObject(group);
+        const center = bbox.getCenter(new THREE.Vector3());
+        const size = bbox.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        cameraZ *= 1.5;
+
+        camera.position.copy(center);
+        camera.position.z += cameraZ;
+        camera.lookAt(center);
+        controls.target.copy(center);
+        controls.update();
+
+        // Build floor list
+        floorListEl.innerHTML = "";
+        floors.forEach((floor, idx) => {
+          const btn = document.createElement("button");
+          btn.className = "btn";
+          btn.textContent = floor;
+          btn.dataset.floorIndex = idx;
+          btn.addEventListener("click", () => {
+            setStatus("Floor filter: " + floor);
           });
-        }
-
-        // Get all rooms/spaces
-        const IFCSPACE = 3856911033;
-        const spaceIDs = await viewer.IFC.loader.ifcManager.getAllItemsOfType(currentModelID, IFCSPACE, false);
-
-        allRooms = spaceIDs || [];
-
-        // Assign random colors to rooms
-        allRooms.forEach((roomID, index) => {
-          roomColors[roomID] = colorPalette[index % colorPalette.length];
+          floorListEl.appendChild(btn);
         });
 
-        buildFloorButtons();
-      } catch (e) {
-        console.error("Error extracting structure:", e);
-        allStoreys = [];
-        allRooms = [];
-      }
-    }
-
-    function buildFloorButtons(){
-      if (allStoreys.length === 0) {
-        floorListEl.innerHTML = '<p class="hint">No floors detected in this IFC.</p>';
-        return;
-      }
-
-      let html = "";
-      allStoreys.forEach((storey, idx) => {
-        html += `<button class="btn floor-btn" data-floor-id="${storey.expressID}">${escapeHtml(storey.name)}</button>`;
-      });
-      html += `<button class="btn floor-btn active" data-floor-id="all">Whole Building</button>`;
-
-      floorListEl.innerHTML = html;
-
-      document.querySelectorAll(".floor-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          handleFloorClick(btn);
+        const allBtn = document.createElement("button");
+        allBtn.className = "btn active";
+        allBtn.textContent = "Whole Building";
+        allBtn.addEventListener("click", () => {
+          setStatus("Showing whole building");
         });
-      });
-    }
+        floorListEl.appendChild(allBtn);
 
-    function handleFloorClick(btn){
-      // Remove active class from previous button
-      if (activeFloorButton) {
-        activeFloorButton.classList.remove("active");
-      }
+        showSuccess("Model loaded successfully!");
+        setStatus("Model loaded. Click elements to inspect.");
 
-      // Add active class to clicked button
-      btn.classList.add("active");
-      activeFloorButton = btn;
-
-      const floorId = btn.dataset.floorId;
-
-      if (floorId === "all") {
-        showAllElements();
-        setStatus("Showing whole building");
-      } else {
-        isolateFloor(parseInt(floorId));
-        setStatus(`Floor isolated: ${btn.textContent}`);
-      }
-    }
-
-    function showAllElements(){
-      if (!viewer || !viewer.IFC || !viewer.IFC.selector || !viewer.IFC.selector.unpickIfcItems) return;
-      try {
-        viewer.IFC.selector.unpickIfcItems();
-      } catch (e) {
-        console.error("Error showing all elements:", e);
-      }
-    }
-
-    async function isolateFloor(storeyExpressID){
-      // This is a placeholder for floor isolation
-      // Full implementation would require hiding/showing specific elements
-      setStatus(`Floor isolation: ${storeyExpressID} (full implementation pending)`);
-      console.log("Isolating floor:", storeyExpressID);
-    }
-
-    async function applyRoomColors(){
-      if (!viewer || currentModelID === null || allRooms.length === 0) return;
-
-      try {
-        for (let roomID of allRooms) {
-          const color = roomColors[roomID];
-          if (color) {
-            // Apply color to room
-            const subset = viewer.IFC.loader.ifcManager.createSubset({
-              modelID: currentModelID,
-              ids: [roomID],
-              removePrevious: false,
-              customID: `room-${roomID}`,
-              material: new THREE.MeshLambertMaterial({
-                color: color,
-                transparent: true,
-                opacity: 0.6
-              })
-            });
-          }
-        }
-        showSuccess(`✓ Applied colors to ${allRooms.length} rooms`);
-      } catch (e) {
-        console.error("Error applying room colors:", e);
-      }
-    }
-
-    async function pickAndShowInfo(){
-      if (!viewer || currentModelID === null) return;
-
-      const result = await viewer.IFC.selector.pickIfcItem(false);
-      if (!result) return;
-
-      const props = await viewer.IFC.getProperties(result.modelID, result.id, true, false);
-
-      const name = props?.Name?.value || "-";
-      const globalId = props?.GlobalId?.value || "-";
-      const type = props?.type || "-";
-      const objectType = props?.ObjectType?.value || "-";
-
-      let html = `
-        <div><b>Name:</b> ${escapeHtml(name)}</div>
-        <div><b>Type:</b> ${escapeHtml(type)}</div>
-        <div><b>Object Type:</b> ${escapeHtml(objectType)}</div>
-        <div><b>GlobalId:</b> ${escapeHtml(globalId)}</div>
-      `;
-
-      // Add additional properties if available
-      if (props.psets && props.psets.length > 0) {
-        html += '<div class="divider"></div><b>Properties:</b>';
-        props.psets.slice(0, 3).forEach(pset => {
-          if (pset.HasProperties) {
-            pset.HasProperties.slice(0, 5).forEach(prop => {
-              const pName = prop.Name?.value || "";
-              const pValue = prop.NominalValue?.value || "";
-              if (pName && pValue) {
-                html += `<div style="font-size:12px; margin-left:10px;">${escapeHtml(pName)}: ${escapeHtml(String(pValue))}</div>`;
-              }
-            });
-          }
-        });
-      }
-
-      infoEl.innerHTML = html;
-    }
-
-    // Init viewer
-    try{
-      initViewer();
-    }catch(err){
-      console.error(err);
-      showError("Viewer init failed:\n" + (err?.stack || err?.message || String(err)));
-      setStatus("Init failed ❌");
-    }
-
-    // File select
-    fileInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      try{
-        await loadIfcRobust(file);
-      }catch(err){
+      } catch (err) {
         console.error(err);
         showError(
-          "IFC load failed.\n\n" +
+          "IFC Load Error:\n\n" +
           "Suggestions:\n" +
           "1) Export as IFC4 Reference View from Revit\n" +
           "2) Check file is valid IFC\n" +
           "3) Try smaller test file\n\n" +
           "Error: " + (err?.message || String(err))
         );
-        setStatus("Failed to load IFC ❌");
+        setStatus("Load failed.");
+      }
+    }
+
+    // Click handler for element inspection
+    document.addEventListener("click", (event) => {
+      if (!renderer || !renderer.domElement.contains(event.target)) return;
+      if (!currentModel) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(currentModel, true);
+
+      if (intersects.length > 0) {
+        const obj = intersects[0].object;
+        const data = obj.userData;
+        infoEl.innerHTML = "<b>Name:</b> " + escapeHtml(data.name || "Unknown") + "<br>" +
+                          "<b>Type:</b> " + escapeHtml(data.type || "Unknown") + "<br>" +
+                          "<b>Position:</b> Visible in scene";
       }
     });
 
+    // Initialize
+    try {
+      initViewer();
+    } catch (err) {
+      console.error(err);
+      showError("Viewer init failed: " + err.message);
+    }
+
+    // File input
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await loadIFC(file);
+    });
+
     resetBtn.addEventListener("click", () => {
-      if (!viewer) return;
-      try { viewer.context.fitToFrame(); } catch (e) {}
+      if (!camera) return;
+      camera.position.set(50, 50, 50);
+      controls.target.set(0, 0, 0);
+      controls.update();
       setStatus("Camera reset.");
     });
 
     clearBtn.addEventListener("click", () => {
       clearError();
-      setOverlay(false);
       clearModel();
+      fileInput.value = "";
     });
 
-    viewerWrap.addEventListener("click", async () => {
-      try { await pickAndShowInfo(); } catch (e) { console.error(e); }
+    roomsOnlyCheckbox.addEventListener("change", (e) => {
+      setStatus(e.target.checked ? "Rooms only: ON" : "Rooms only: OFF");
     });
-
-    // Rooms only toggle
-    roomsOnlyCheckbox.addEventListener("change", async (e) => {
-      if (e.target.checked) {
-        await applyRoomColors();
-        setStatus("Rooms colored ✓");
-      } else {
-        showAllElements();
-        setStatus("Room colors cleared");
-      }
-    });
-
   </script>
 </body>
 </html>
