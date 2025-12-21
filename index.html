@@ -5,7 +5,7 @@
   <title>KAU IFC Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Three.js + web-ifc + IFC viewer -->
+  <!-- Libraries -->
   <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
   <script src="https://unpkg.com/web-ifc@0.0.57/web-ifc-api.js"></script>
   <script src="https://unpkg.com/ifc-viewer@1.0.250/dist/ifc-viewer.js"></script>
@@ -14,12 +14,13 @@
     :root{
       --kau-green:#006C35;
       --bg:#ffffff;
-      --panel:#f3f4f6;     /* light gray */
-      --border:#d1d5db;    /* gray */
-      --text:#111827;      /* near-black */
-      --muted:#4b5563;     /* gray text */
-      --btn:#e5e7eb;       /* button gray */
+      --panel:#f3f4f6;
+      --border:#d1d5db;
+      --text:#111827;
+      --muted:#4b5563;
+      --btn:#e5e7eb;
       --btnHover:#d1d5db;
+      --danger:#b91c1c;
     }
 
     html, body {
@@ -44,7 +45,7 @@
       letter-spacing: 0.2px;
     }
 
-    /* Top control bar (gray) */
+    /* Controls bar */
     .top-controls{
       position: absolute;
       top: 74px;
@@ -61,11 +62,20 @@
       z-index: 20;
     }
 
-    .top-controls .label{
+    .label{
       font-weight: 700;
       color: var(--muted);
-      margin-right: 6px;
       white-space: nowrap;
+    }
+
+    /* SMALLER input */
+    .file{
+      width: 260px;        /* <-- make it smaller */
+      max-width: 44vw;     /* responsive */
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
     }
 
     .btn{
@@ -76,23 +86,51 @@
       cursor: pointer;
       font-weight: 700;
       color: var(--text);
+      white-space: nowrap;
     }
     .btn:hover{ background: var(--btnHover); }
 
-    .file{
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px;
-      flex: 1;
-      min-width: 160px;
-    }
-
-    /* Viewer fills screen under header */
     #viewer {
       width: 100%;
       height: calc(100% - 64px);
       background: white;
+    }
+
+    /* Status */
+    #statusWrap{
+      position:absolute;
+      bottom: 10px;
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display:flex;
+      gap:10px;
+      align-items: stretch;
+    }
+
+    #statusText{
+      flex: 1;
+      background: rgba(243,244,246,0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #errorBox{
+      width: 420px;
+      max-width: 40vw;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+      overflow:auto;
+      color: var(--danger);
+      display:none;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     /* Loading overlay */
@@ -144,21 +182,6 @@
       50%{ transform: translateX(40%); width: 45%; }
       100%{ transform: translateX(160%); width: 30%; }
     }
-
-    /* Status text */
-    #statusText{
-      position:absolute;
-      bottom: 10px;
-      left: 12px;
-      right: 12px;
-      background: rgba(243,244,246,0.92);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      z-index: 20;
-      color: var(--muted);
-      font-size: 13px;
-    }
   </style>
 </head>
 
@@ -168,18 +191,22 @@
   <div class="top-controls">
     <span class="label">Load IFC:</span>
     <input type="file" id="fileInput" class="file" accept=".ifc" />
-    <button id="btnReset" class="btn">Reset View</button>
+    <button id="btnLoad" class="btn">Load</button>
+    <button id="btnClear" class="btn">Clear Model</button>
   </div>
 
   <div id="viewer"></div>
 
-  <div id="statusText">Ready. Choose an IFC file (renaming to English is recommended).</div>
+  <div id="statusWrap">
+    <div id="statusText">Ready. Choose an IFC file, then press Load.</div>
+    <div id="errorBox"></div>
+  </div>
 
   <div id="overlay" class="overlay">
     <div class="card">
       <div class="title">Loading IFC…</div>
       <div id="overlayMsg" class="msg">
-        This can take time for large IFC files because the browser is converting the model to 3D geometry.
+        Parsing IFC and generating geometry (this can take time for big models).
       </div>
       <div class="bar"><div></div></div>
     </div>
@@ -188,77 +215,128 @@
   <script>
     const container = document.getElementById("viewer");
     const statusText = document.getElementById("statusText");
+    const errorBox = document.getElementById("errorBox");
     const overlay = document.getElementById("overlay");
     const overlayMsg = document.getElementById("overlayMsg");
     const fileInput = document.getElementById("fileInput");
-    const btnReset = document.getElementById("btnReset");
+    const btnLoad = document.getElementById("btnLoad");
+    const btnClear = document.getElementById("btnClear");
 
-    // White background
-    const viewer = new IfcViewerAPI({ container, backgroundColor: 0xffffff });
+    let viewer = null;
+    let loadedModel = null;
 
-    // Optional helpers (these can slow slightly on huge models; you can disable if needed)
-    // viewer.axes.setAxes();
-    // viewer.grid.setGrid();
+    function setStatus(msg) {
+      statusText.textContent = msg;
+    }
 
-    // WASM path
-    viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.57/");
+    function showError(msg) {
+      errorBox.style.display = "block";
+      errorBox.textContent = msg;
+      setStatus("Error ❌ See the red box on the right.");
+    }
 
-    // Small performance hints (safe)
-    try {
-      // reduce some render overhead
-      viewer.context.renderer.physicallyCorrectLights = false;
-      viewer.context.renderer.outputColorSpace = THREE.SRGBColorSpace;
-      viewer.context.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    } catch (e) {}
+    function clearError() {
+      errorBox.style.display = "none";
+      errorBox.textContent = "";
+    }
 
     function setOverlay(on, msg) {
       overlay.style.display = on ? "flex" : "none";
       if (msg) overlayMsg.textContent = msg;
     }
 
-    function setStatus(msg) {
-      statusText.textContent = msg;
+    // 1) Create viewer safely (and show errors if something fails)
+    try {
+      if (typeof IfcViewerAPI === "undefined") {
+        showError("IfcViewerAPI is undefined. The viewer library did not load from unpkg.");
+      } else {
+        viewer = new IfcViewerAPI({ container, backgroundColor: 0xffffff });
+        viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.57/");
+        setStatus("Viewer ready. Choose an IFC file, then press Load.");
+      }
+    } catch (e) {
+      showError("Failed to create viewer: " + (e && e.message ? e.message : String(e)));
     }
 
-    fileInput.addEventListener("change", async (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
+    // 2) Clear model (does NOT clear file input)
+    function clearModel() {
+      if (!viewer) return;
+      try {
+        if (loadedModel) {
+          viewer.context.scene.remove(loadedModel);
+          loadedModel = null;
+        }
+        // Try to clear IFC internal state if possible
+        try { viewer.IFC.loader.ifcManager.dispose(); } catch (e) {}
+        setStatus("Model cleared. Choose an IFC file, then press Load.");
+      } catch (e) {
+        showError("Clear model failed: " + (e && e.message ? e.message : String(e)));
+      }
+    }
 
-      // Suggest rename (not required)
-      setStatus(`Selected: ${file.name} — starting load…`);
+    btnClear.addEventListener("click", () => {
+      clearError();
+      clearModel();
+    });
 
+    // 3) Load button (more reliable than relying on change event)
+    btnLoad.addEventListener("click", async () => {
+      clearError();
+      if (!viewer) {
+        showError("Viewer is not initialized.");
+        return;
+      }
+
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        setStatus("Please choose an IFC file first.");
+        return;
+      }
+
+      // Arabic name is usually fine, but renaming removes edge cases
+      setStatus("Selected: " + file.name + " — starting load…");
       setOverlay(true, "Reading file…");
-      await new Promise(r => setTimeout(r, 50));
 
+      await new Promise(r => setTimeout(r, 50));
       const url = URL.createObjectURL(file);
 
       try {
-        setOverlay(true, "Parsing IFC and generating 3D geometry (this is the slow part) …");
-        await viewer.IFC.loadIfcUrl(url);
+        // Remove any existing model first (so reload works)
+        clearModel();
+
+        setOverlay(true, "Parsing IFC and generating 3D geometry (slow part)…");
+        loadedModel = await viewer.IFC.loadIfcUrl(url);
 
         setOverlay(true, "Finishing…");
         viewer.context.fitToFrame();
 
         setOverlay(false);
-        setStatus("Loaded ✅ You can rotate/pan/zoom. Click elements (next step: info panel).");
-      } catch (err) {
-        console.error(err);
+        setStatus("Loaded ✅ You can orbit/zoom. Next: click elements to show info panel.");
+      } catch (e) {
         setOverlay(false);
-        setStatus("Error loading IFC. Try renaming the file to English and reload. Check console for details.");
-        alert("Error loading IFC. Try renaming file to English and reloading.");
+        showError(
+          "IFC load failed.\n\n" +
+          "Try these:\n" +
+          "1) Rename the file to English (e.g., KAU.ifc)\n" +
+          "2) Try a smaller IFC to test\n" +
+          "3) Open DevTools Console and share the error text\n\n" +
+          "Error details:\n" + (e && e.stack ? e.stack : (e && e.message ? e.message : String(e)))
+        );
       }
     });
 
-    btnReset.addEventListener("click", () => {
-      try {
-        viewer.context.fitToFrame();
-        setStatus("View reset.");
-      } catch (e) {}
+    // Optional: show that file selection changed
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (file) {
+        setStatus("Selected: " + file.name + " — press Load.");
+      } else {
+        setStatus("Ready. Choose an IFC file, then press Load.");
+      }
     });
 
-    // Resize handling
     window.addEventListener("resize", () => {
-      try { viewer.context.resize(); } catch (e) {}
+      try { if (viewer) viewer.context.resize(); } catch (e) {}
     });
   </script>
 </body>
