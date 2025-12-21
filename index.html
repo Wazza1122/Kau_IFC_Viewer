@@ -74,20 +74,12 @@
       transition: all 0.2s;
     }
     .btn:hover{ background:var(--btn-hover); }
-    .btn.active{
-      background:var(--btn-active);
-      color:var(--btn-active-text);
-      border-color:var(--btn-active);
-    }
 
     .status{
       margin-left:auto;
       font-size:13px;
       color:var(--muted);
       white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width:45vw;
     }
 
     .main{
@@ -119,7 +111,7 @@
       overflow:hidden;
       position:relative;
     }
-
+    
     #viewer{
       position:absolute;
       inset:0;
@@ -127,25 +119,7 @@
       height:100%;
     }
 
-    .smallRow{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-
-    .toggle{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      padding:8px;
-      background:var(--panel2);
-      border:1px solid var(--border);
-      border-radius:12px;
-      font-size:13px;
-      width: 100%;
-    }
-
-    .floorList .btn{
-      width:100%;
-      text-align:left;
-      margin:6px 0;
-    }
+    .divider{ height:1px; background:var(--border); margin:10px 0; }
 
     .hint{
       font-size:12px;
@@ -155,38 +129,35 @@
     }
 
     .kv{ font-size:13px; line-height:1.5; }
-    .kv b{ display:inline-block; min-width:120px; }
-    .divider{ height:1px; background:var(--border); margin:10px 0; }
-
-    #errorBox{
-      margin-top:10px;
-      padding:10px;
-      border:1px solid var(--border);
-      border-radius:12px;
-      background:#fff;
-      color:var(--danger);
-      font-size:12px;
-      white-space:pre-wrap;
-      word-break:break-word;
-      display:none;
-    }
+    .kv b{ display:inline-block; min-width:100px; }
 
     .success-msg{
       padding:10px;
       background:#dcfce7;
       border:1px solid #86efac;
-      border-radius:12px;
+      border-radius:8px;
       color:#166534;
       font-size:12px;
       margin-top:10px;
       display:none;
     }
 
-    @media (max-width: 900px) {
-      .main{
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
-      }
+    .error-msg{
+      padding:10px;
+      background:#fee2e2;
+      border:1px solid #fca5a5;
+      border-radius:8px;
+      color:#b91c1c;
+      font-size:12px;
+      margin-top:10px;
+      display:none;
+      white-space:pre-wrap;
+    }
+
+    .floorList .btn{
+      width:100%;
+      text-align:left;
+      margin:6px 0;
     }
   </style>
 </head>
@@ -206,14 +177,7 @@
     <!-- Left -->
     <div class="panel">
       <h3>Controls</h3>
-
-      <div class="smallRow">
-        <div class="toggle">
-          <input id="roomsOnly" type="checkbox" />
-          <label for="roomsOnly">Rooms only</label>
-        </div>
-      </div>
-
+      
       <div class="divider"></div>
 
       <h3>Floors</h3>
@@ -222,10 +186,10 @@
       </div>
 
       <div id="successBox" class="success-msg"></div>
-      <div id="errorBox"></div>
+      <div id="errorBox" class="error-msg"></div>
 
       <div class="hint">
-        Click floor buttons to isolate levels. Click elements in 3D view to see info.
+        💡 Click floor buttons to filter. Click elements to inspect.
       </div>
     </div>
 
@@ -245,6 +209,12 @@
   <script src="https://cdn.jsdelivr.net/npm/three@r128/examples/js/controls/OrbitControls.js"></script>
 
   <script>
+    // Global variables
+    let scene, camera, renderer, controls;
+    let currentModel = null;
+    let raycaster, mouse;
+
+    // UI Elements
     const statusEl = document.getElementById("status");
     const infoEl = document.getElementById("info");
     const fileInput = document.getElementById("fileInput");
@@ -254,11 +224,6 @@
     const successBox = document.getElementById("successBox");
     const floorListEl = document.getElementById("floorList");
     const viewerWrap = document.getElementById("viewerWrap");
-    const roomsOnlyCheckbox = document.getElementById("roomsOnly");
-
-    let scene, camera, renderer, controls;
-    let currentModel = null;
-    let raycaster, mouse;
 
     function setStatus(msg) { statusEl.textContent = msg; }
 
@@ -268,31 +233,17 @@
       successBox.style.display = "none";
     }
 
-    function clearError() {
-      errorBox.style.display = "none";
-      errorBox.textContent = "";
-    }
-
     function showSuccess(msg) {
       successBox.style.display = "block";
       successBox.textContent = msg;
       errorBox.style.display = "none";
     }
 
-    function escapeHtml(v) {
-      return String(v)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    function clearError() {
+      errorBox.style.display = "none";
     }
 
-    function clearInfo() {
-      infoEl.innerHTML = "Click any element in the model.";
-    }
-
-    // Initialize Three.js scene
+    // Initialize Three.js viewer
     function initViewer() {
       const container = document.getElementById("viewer");
 
@@ -301,19 +252,18 @@
 
       camera = new THREE.PerspectiveCamera(
         75,
-        container.parentElement.clientWidth / container.parentElement.clientHeight,
+        viewerWrap.clientWidth / viewerWrap.clientHeight,
         0.1,
         10000
       );
       camera.position.set(50, 50, 50);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(container.parentElement.clientWidth, container.parentElement.clientHeight);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(viewerWrap.clientWidth, viewerWrap.clientHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.autoRotate = false;
       controls.enableDamping = true;
 
       // Lighting
@@ -328,7 +278,7 @@
       const gridHelper = new THREE.GridHelper(100, 20, 0xcccccc, 0xeeeeee);
       scene.add(gridHelper);
 
-      // Raycaster for picking
+      // Raycaster
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2();
 
@@ -340,16 +290,16 @@
       }
       animate();
 
-      // Handle window resize
+      // Handle resize
       window.addEventListener("resize", () => {
-        const w = container.parentElement.clientWidth;
-        const h = container.parentElement.clientHeight;
+        const w = viewerWrap.clientWidth;
+        const h = viewerWrap.clientHeight;
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
       });
 
-      setStatus("Viewer initialized. Choose an IFC file.");
+      setStatus("✅ Viewer ready. Load IFC file.");
     }
 
     function clearModel() {
@@ -357,7 +307,7 @@
         scene.remove(currentModel);
         currentModel = null;
       }
-      clearInfo();
+      infoEl.textContent = "Click any element in the model.";
       floorListEl.innerHTML = '<p class="hint">Load an IFC file to see available floors.</p>';
       setStatus("Model cleared.");
     }
@@ -366,47 +316,44 @@
       if (!scene) initViewer();
 
       clearError();
-      clearInfo();
-      setStatus("Loading IFC...");
-
-      clearModel();
+      setStatus("Loading IFC file...");
 
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileSize = (file.size / 1024 / 1024).toFixed(2);
 
-        // Create a building representation
+        clearModel();
+
+        // Create building group
         const group = new THREE.Group();
 
-        // Main building box
-        const geometry = new THREE.BoxGeometry(30, 40, 30);
-        const material = new THREE.MeshPhongMaterial({ 
-          color: 0x0b6b3a,
-          shininess: 100
-        });
-        const mainBox = new THREE.Mesh(geometry, material);
+        // Main building
+        const mainGeometry = new THREE.BoxGeometry(30, 40, 30);
+        const mainMaterial = new THREE.MeshPhongMaterial({ color: 0x0b6b3a });
+        const mainBox = new THREE.Mesh(mainGeometry, mainMaterial);
         mainBox.position.y = 20;
-        mainBox.userData = { name: "Building", type: "IFCBUILDING" };
+        mainBox.userData = { name: "Main Building", type: "IFCBUILDING" };
+        mainBox.castShadow = true;
         group.add(mainBox);
 
-        // Add floors
-        const floors = ["Ground", "Floor 1", "Floor 2", "Floor 3"];
+        // Create floors
+        const floors = ["Ground Floor", "Floor 1", "Floor 2", "Floor 3"];
         for (let i = 0; i < floors.length; i++) {
-          const floorGeom = new THREE.BoxGeometry(32, 1.5, 32);
-          const floorMat = new THREE.MeshPhongMaterial({ color: 0x666666 });
-          const floor = new THREE.Mesh(floorGeom, floorMat);
+          const floorGeometry = new THREE.BoxGeometry(32, 1.5, 32);
+          const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+          const floor = new THREE.Mesh(floorGeometry, floorMaterial);
           floor.position.y = i * 10;
           floor.userData = { name: floors[i], type: "IFCBUILDINGSTOREY" };
           group.add(floor);
         }
 
-        // Add some walls
+        // Create walls
+        const wallMaterial = new THREE.MeshPhongMaterial({ color: 0xcccccc });
         for (let i = 0; i < 4; i++) {
-          const wallGeom = new THREE.BoxGeometry(1, 8, 30);
-          const wallMat = new THREE.MeshPhongMaterial({ color: 0xcccccc });
-          const wall = new THREE.Mesh(wallGeom, wallMat);
+          const wallGeometry = new THREE.BoxGeometry(1, 8, 30);
+          const wall = new THREE.Mesh(wallGeometry, wallMaterial);
           wall.position.x = (i % 2) * 15 - 7.5;
-          wall.position.z = (Math.floor(i / 2)) * 15 - 7.5;
+          wall.position.z = Math.floor(i / 2) * 15 - 7.5;
           wall.position.y = 4;
           wall.userData = { name: "Wall", type: "IFCWALL" };
           group.add(wall);
@@ -436,41 +383,33 @@
           const btn = document.createElement("button");
           btn.className = "btn";
           btn.textContent = floor;
-          btn.dataset.floorIndex = idx;
           btn.addEventListener("click", () => {
-            setStatus("Floor filter: " + floor);
+            setStatus("Floor: " + floor);
           });
           floorListEl.appendChild(btn);
         });
 
         const allBtn = document.createElement("button");
-        allBtn.className = "btn active";
+        allBtn.className = "btn";
         allBtn.textContent = "Whole Building";
         allBtn.addEventListener("click", () => {
           setStatus("Showing whole building");
         });
         floorListEl.appendChild(allBtn);
 
-        showSuccess("Model loaded successfully!");
-        setStatus("Model loaded. Click elements to inspect.");
+        showSuccess("✓ File loaded: " + file.name + " (" + fileSize + " MB)");
+        setStatus("✅ Loaded. Click elements to inspect.");
 
-      } catch (err) {
-        console.error(err);
-        showError(
-          "IFC Load Error:\n\n" +
-          "Suggestions:\n" +
-          "1) Export as IFC4 Reference View from Revit\n" +
-          "2) Check file is valid IFC\n" +
-          "3) Try smaller test file\n\n" +
-          "Error: " + (err?.message || String(err))
-        );
-        setStatus("Load failed.");
+      } catch (error) {
+        console.error(error);
+        showError("Error loading file:\n" + error.message);
+        setStatus("❌ Load failed.");
       }
     }
 
     // Click handler for element inspection
     document.addEventListener("click", (event) => {
-      if (!renderer || !renderer.domElement.contains(event.target)) return;
+      if (!renderer.domElement.contains(event.target)) return;
       if (!currentModel) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
@@ -482,34 +421,25 @@
 
       if (intersects.length > 0) {
         const obj = intersects[0].object;
-        const data = obj.userData;
-        infoEl.innerHTML = "<b>Name:</b> " + escapeHtml(data.name || "Unknown") + "<br>" +
-                          "<b>Type:</b> " + escapeHtml(data.type || "Unknown") + "<br>" +
-                          "<b>Position:</b> Visible in scene";
+        infoEl.innerHTML = 
+          "<b>Name:</b> " + (obj.userData.name || "Element") + "<br>" +
+          "<b>Type:</b> " + (obj.userData.type || "Unknown");
       }
     });
 
-    // Initialize
-    try {
-      initViewer();
-    } catch (err) {
-      console.error(err);
-      showError("Viewer init failed: " + err.message);
-    }
-
-    // File input
-    fileInput.addEventListener("change", async (e) => {
+    // Event listeners
+    fileInput.addEventListener("change", (e) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      await loadIFC(file);
+      if (file) loadIFC(file);
     });
 
     resetBtn.addEventListener("click", () => {
-      if (!camera) return;
-      camera.position.set(50, 50, 50);
-      controls.target.set(0, 0, 0);
-      controls.update();
-      setStatus("Camera reset.");
+      if (camera) {
+        camera.position.set(50, 50, 50);
+        controls.target.set(0, 0, 0);
+        controls.update();
+        setStatus("Camera reset.");
+      }
     });
 
     clearBtn.addEventListener("click", () => {
@@ -518,9 +448,8 @@
       fileInput.value = "";
     });
 
-    roomsOnlyCheckbox.addEventListener("change", (e) => {
-      setStatus(e.target.checked ? "Rooms only: ON" : "Rooms only: OFF");
-    });
+    // Initialize
+    initViewer();
   </script>
 </body>
 </html>
