@@ -49,7 +49,6 @@
       white-space: nowrap;
     }
 
-    /* Smaller input slot */
     input[type="file"]{
       width:240px;
       max-width:240px;
@@ -107,12 +106,16 @@
       border-radius:14px;
       overflow:hidden;
       position:relative;
-      min-height: 300px;
+      min-height: 320px;
     }
+
+    /* Canvas fills the center area */
     #viewerCanvas{
       position:absolute;
       inset:0;
       display:block;
+      width:100%;
+      height:100%;
     }
 
     .toggle{
@@ -141,17 +144,10 @@
       margin-top:8px;
     }
 
-    .kv{
-      font-size:13px;
-      line-height:1.5;
-    }
+    .kv{ font-size:13px; line-height:1.5; }
     .kv b{ display:inline-block; min-width:120px; }
 
-    .divider{
-      height:1px;
-      background:var(--border);
-      margin:10px 0;
-    }
+    .divider{ height:1px; background:var(--border); margin:10px 0; }
 
     #errorBox{
       margin-top:10px;
@@ -166,7 +162,6 @@
       display:none;
     }
 
-    /* Loading overlay */
     #overlay{
       position:absolute;
       inset:0;
@@ -195,7 +190,7 @@
   <div class="toolbar">
     <div class="label">Load IFC</div>
     <input id="fileInput" type="file" accept=".ifc" />
-    <button id="resetBtn" class="btn" type="button">Reset View</button>
+    <button id="resetBtn" class="btn" type="button">Reset Camera</button>
     <button id="clearBtn" class="btn" type="button">Clear Model</button>
     <div id="status" class="status">Ready.</div>
   </div>
@@ -225,7 +220,7 @@
       <div id="errorBox"></div>
 
       <div class="hint">
-        Tip: big IFC files may take time on mobile. Desktop is recommended.
+        You should see a gray grid in the center even before loading an IFC.
       </div>
     </div>
 
@@ -245,14 +240,12 @@
       <h3>Selected Element Info</h3>
       <div id="info" class="kv">Click any element in the model.</div>
       <div class="divider"></div>
-      <div class="hint">
-        Next: full properties + random room colors + real floor filtering + element toggles.
-      </div>
+      <div class="hint">Next: full properties + random room colors + real floor filtering.</div>
     </div>
   </div>
 
   <script type="module">
-    // ✅ Use jsDelivr for examples modules to avoid CORS blocks on unpkg
+    // ✅ Stable, CORS-safe imports for GitHub Pages
     import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js";
     import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/OrbitControls.js";
     import { IFCLoader } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/loaders/IFCLoader.js";
@@ -306,25 +299,37 @@
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0xffffff);
 
-      camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
-      camera.position.set(12, 10, 12);
+      camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+      camera.position.set(18, 14, 18);
 
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
+      controls.target.set(0, 2, 0);
+      controls.update();
 
+      // Lights
       scene.add(new THREE.AmbientLight(0xffffff, 0.85));
       const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-      dir.position.set(10, 15, 8);
+      dir.position.set(20, 30, 10);
       scene.add(dir);
+
+      // ✅ Plane/Grid shown immediately
+      const grid = new THREE.GridHelper(100, 100, 0xcccccc, 0xdddddd);
+      grid.position.y = 0;
+      scene.add(grid);
+
+      const axes = new THREE.AxesHelper(5);
+      axes.position.y = 0.01;
+      scene.add(axes);
 
       // IFC Loader
       ifcLoader = new IFCLoader();
       ifcLoader.ifcManager.setWasmPath(WASM_BASE);
 
-      // Resize based on container (not window)
+      // Resize to container
       const ro = new ResizeObserver(() => resizeToContainer());
       ro.observe(viewerWrap);
       resizeToContainer();
@@ -332,14 +337,13 @@
       renderer.domElement.addEventListener("click", pick);
 
       animate();
-      setStatus("Viewer ready. Choose an IFC file.");
+      setStatus("Viewer ready. You should see the grid now.");
     }
 
     function resizeToContainer(){
       const rect = viewerWrap.getBoundingClientRect();
       const w = Math.max(300, Math.floor(rect.width));
       const h = Math.max(300, Math.floor(rect.height));
-
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -354,25 +358,26 @@
     async function loadIfcFile(file){
       clearError();
       clearInfo();
-      setOverlay(true, "Parsing IFC… (large files can take time)");
+      setOverlay(true, "Parsing IFC… (big files can take time)");
       setStatus("Loading IFC…");
 
-      // remove old model
       if (ifcModel){
         scene.remove(ifcModel);
-        try { ifcLoader.ifcManager.dispose(); } catch(e) {}
         ifcModel = null;
       }
 
       const url = URL.createObjectURL(file);
-
-      // load
       const model = await ifcLoader.loadAsync(url);
+
+      // center-ish
+      model.position.set(0, 0, 0);
       ifcModel = model;
       scene.add(ifcModel);
 
-      // fit view
       controls.reset();
+      controls.target.set(0, 2, 0);
+      controls.update();
+
       setOverlay(false);
       setStatus("Loaded ✅ Click any element.");
     }
@@ -404,11 +409,9 @@
       `;
     }
 
-    // UI events
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       try{
         await loadIfcFile(file);
       }catch(err){
@@ -421,7 +424,9 @@
 
     resetBtn.addEventListener("click", () => {
       controls.reset();
-      setStatus("View reset.");
+      controls.target.set(0, 2, 0);
+      controls.update();
+      setStatus("Camera reset.");
     });
 
     clearBtn.addEventListener("click", () => {
@@ -433,7 +438,6 @@
       }
       clearInfo();
       setStatus("Model cleared.");
-      // We do NOT clear file input (so it stays selected)
     });
 
     // placeholders
