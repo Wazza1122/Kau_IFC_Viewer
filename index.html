@@ -5,18 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KAU IFC Viewer</title>
 
-  <!-- Import map so "three" imports work on GitHub Pages -->
+  <!-- Import map (fixes "Failed to resolve module specifier" errors) -->
   <script type="importmap">
   {
     "imports": {
       "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
       "three/examples/jsm/": "https://unpkg.com/three@0.155.0/examples/jsm/",
-      "web-ifc": "https://unpkg.com/web-ifc@0.0.66/web-ifc-api.js",
-      "web-ifc-three": "https://unpkg.com/web-ifc-three@0.0.126/dist/index.js"
-    }
-}
-</script>
 
+      "web-ifc": "https://unpkg.com/web-ifc@0.0.66/web-ifc-api.js",
+      "web-ifc-three": "https://unpkg.com/web-ifc-three@0.0.126/dist/index.js",
+
+      "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.6/build/index.module.js"
+    }
+  }
+  </script>
 
   <style>
     :root{
@@ -34,7 +36,6 @@
     *{ box-sizing:border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     body{ margin:0; background:var(--bg); color:var(--text); }
 
-    /* Top header */
     .topbar{
       background:var(--kau-green);
       color:#fff;
@@ -46,7 +47,6 @@
       letter-spacing:.2px;
     }
 
-    /* Toolbar */
     .toolbar{
       display:flex;
       gap:10px;
@@ -60,12 +60,13 @@
       font-size:14px;
       color:var(--text);
       font-weight:600;
+      white-space: nowrap;
     }
 
     /* Smaller input slot */
     input[type="file"]{
-      width:220px;
-      max-width:220px;
+      width:240px;
+      max-width:240px;
       padding:6px;
       background:#fff;
       border:1px solid var(--border);
@@ -79,6 +80,7 @@
       border-radius:10px;
       cursor:pointer;
       font-weight:600;
+      white-space: nowrap;
     }
     .btn:hover{ background:var(--btn-hover); }
 
@@ -92,7 +94,6 @@
       max-width:45vw;
     }
 
-    /* Main layout */
     .main{
       height: calc(100vh - 48px - 52px);
       display:grid;
@@ -114,7 +115,6 @@
       font-size:14px;
     }
 
-    /* Viewer container */
     #viewerWrap{
       background:#fff;
       border:1px solid var(--border);
@@ -144,6 +144,7 @@
       border:1px solid var(--border);
       border-radius:12px;
       font-size:13px;
+      width: 100%;
     }
 
     .floorList .btn{
@@ -191,7 +192,7 @@
       <div class="smallRow">
         <div class="toggle">
           <input id="roomsOnly" type="checkbox" />
-          <label for="roomsOnly">Rooms only</label>
+          <label for="roomsOnly">Rooms only (we’ll connect this next)</label>
         </div>
       </div>
 
@@ -204,11 +205,11 @@
         <button class="btn" type="button" data-floor="2">Floor 2</button>
         <button class="btn" type="button" data-floor="3">Floor 3</button>
         <button class="btn" type="button" data-floor="4">Floor 4</button>
+        <button class="btn" type="button" data-floor="all">Whole Building</button>
       </div>
 
       <div class="hint">
-        Tip: If the IFC is ~30MB, first load can take time (especially on mobile).  
-        Keep the tab open until you see “Model loaded”.
+        If the IFC is large, first load can take time. Keep the tab open until it finishes.
       </div>
     </div>
 
@@ -221,21 +222,33 @@
     <div class="panel">
       <h3>Selected Element Info</h3>
       <div id="info" class="kv">Click any element in the model.</div>
+      <div class="divider"></div>
+      <div class="hint">
+        Next step: show full PropertySets + add category toggles + real floor filtering.
+      </div>
     </div>
   </div>
 
   <script type="module">
-    import { IfcViewerAPI } from "https://unpkg.com/web-ifc-viewer@1.0.218/dist/ifc-viewer-api.js";
     import * as THREE from "three";
+    import { IfcViewerAPI } from "https://unpkg.com/web-ifc-viewer@1.0.218/dist/ifc-viewer-api.js";
 
     const statusEl = document.getElementById("status");
     const infoEl = document.getElementById("info");
     const fileInput = document.getElementById("fileInput");
+    const resetBtn = document.getElementById("resetBtn");
+    const clearBtn = document.getElementById("clearBtn");
 
     let viewer = null;
     let currentModelID = null;
 
     function setStatus(msg){ statusEl.textContent = msg; }
+
+    function escapeHtml(v){
+      return String(v).replace(/[&<>"']/g, (m) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+      }[m]));
+    }
 
     function clearInfo(){
       infoEl.innerHTML = "Click any element in the model.";
@@ -249,10 +262,10 @@
         backgroundColor: new THREE.Color(0xffffff)
       });
 
-      // Make sure WASM can be found (hosted on CDN)
+      // WASM for IFC parsing
       viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.66/");
 
-      // Nice defaults
+      // Helpers (optional)
       viewer.axes.setAxes();
       viewer.grid.setGrid();
 
@@ -262,30 +275,26 @@
     async function loadIfcFromFile(file){
       if (!viewer) initViewer();
 
-      setStatus("Loading IFC… (this can take a while for large files)");
+      setStatus("Loading IFC… (may take time for large models)");
       clearInfo();
 
-      // If a model was already loaded, remove it first
+      // Clear previous model (if any)
       if (currentModelID !== null){
         try { viewer.IFC.loader.ifcManager.close(currentModelID); } catch(e) {}
         currentModelID = null;
       }
 
-      // Load IFC
+      // Load the IFC
       const model = await viewer.IFC.loadIfc(file, true);
       currentModelID = model.modelID;
 
       // Fit camera
       try { viewer.context.fitToFrame(); } catch(e) {}
 
-      // Setup picking
-      viewer.IFC.selector.prePickIfcItem();
-      viewer.IFC.selector.pickIfcItem(true);
-
-      setStatus("Model loaded. Click any element to see info.");
+      setStatus("Model loaded ✅ Click any element to see info.");
     }
 
-    async function updateInfoFromSelection(){
+    async function pickAndShowInfo(){
       if (!viewer || currentModelID === null) return;
 
       const result = await viewer.IFC.selector.pickIfcItem(false);
@@ -293,7 +302,6 @@
 
       const props = await viewer.IFC.getProperties(result.modelID, result.id, true, true);
 
-      // Show only useful fields first
       const name = props?.Name?.value ?? "-";
       const globalId = props?.GlobalId?.value ?? "-";
       const type = props?.type ?? "-";
@@ -302,15 +310,7 @@
         <div><b>Name:</b> ${escapeHtml(name)}</div>
         <div><b>Type:</b> ${escapeHtml(type)}</div>
         <div><b>GlobalId:</b> ${escapeHtml(globalId)}</div>
-        <div class="divider"></div>
-        <div class="hint">Full properties are available in the IFC data object.</div>
       `;
-    }
-
-    function escapeHtml(v){
-      return String(v).replace(/[&<>"']/g, (m) => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-      }[m]));
     }
 
     // Events
@@ -318,23 +318,21 @@
       const file = e.target.files?.[0];
       if (!file) return;
 
-      // If your filename is Arabic, local loading is OK.
-      // But if you later try to load it from URL, rename to English to avoid URL encoding issues.
       try{
         await loadIfcFromFile(file);
       }catch(err){
         console.error(err);
-        setStatus("Failed to load IFC. Open Console for details.");
+        setStatus("Failed to load IFC. Check Console for details.");
       }
     });
 
-    document.getElementById("resetBtn").addEventListener("click", () => {
+    resetBtn.addEventListener("click", () => {
       if (!viewer) return;
       try { viewer.context.fitToFrame(); } catch(e) {}
       setStatus("Camera reset.");
     });
 
-    document.getElementById("clearBtn").addEventListener("click", () => {
+    clearBtn.addEventListener("click", () => {
       if (!viewer) return;
 
       if (currentModelID !== null){
@@ -342,30 +340,27 @@
         currentModelID = null;
       }
       clearInfo();
-      setStatus("Model cleared. Choose another IFC.");
-      // NOTE: We do NOT clear the file input automatically.
+      setStatus("Model cleared.");
+      // Note: We do NOT clear the file input; the file remains selected.
     });
 
-    // Click in viewer to update info
-    window.addEventListener("click", async () => {
-      try { await updateInfoFromSelection(); } catch(e) {}
+    // Click in viewer area to pick
+    document.getElementById("viewerWrap").addEventListener("click", async () => {
+      try { await pickAndShowInfo(); } catch(e) {}
     });
 
-    // Rooms-only toggle (placeholder logic: hides categories later)
+    // Placeholders for next steps
     document.getElementById("roomsOnly").addEventListener("change", (e) => {
-      const on = e.target.checked;
-      // We’ll implement real category filtering next (spaces vs walls/slabs/etc.)
-      setStatus(on ? "Rooms only: ON (filtering will be added next)" : "Rooms only: OFF");
+      setStatus(e.target.checked ? "Rooms only: ON (we’ll implement filtering next)" : "Rooms only: OFF");
     });
 
-    // Floor buttons (we will connect to storey filtering next)
     document.querySelectorAll("[data-floor]").forEach(btn => {
       btn.addEventListener("click", () => {
-        setStatus(`Floor filter: ${btn.dataset.floor} (we'll wire this to IFC storeys next)`);
+        setStatus(`Floor filter: ${btn.dataset.floor} (we’ll connect this to storeys next)`);
       });
     });
 
-    // Init
+    // Init now
     initViewer();
   </script>
 </body>
