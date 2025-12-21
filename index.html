@@ -49,7 +49,6 @@
       white-space: nowrap;
     }
 
-    /* Smaller input slot */
     input[type="file"]{
       width:240px;
       max-width:240px;
@@ -113,13 +112,7 @@
       inset:0;
     }
 
-    .smallRow{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      flex-wrap:wrap;
-      margin-bottom:10px;
-    }
+    .smallRow{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
 
     .toggle{
       display:flex;
@@ -146,16 +139,9 @@
       margin-top:8px;
     }
 
-    .kv{
-      font-size:13px;
-      line-height:1.5;
-    }
+    .kv{ font-size:13px; line-height:1.5; }
     .kv b{ display:inline-block; min-width:120px; }
-    .divider{
-      height:1px;
-      background:var(--border);
-      margin:10px 0;
-    }
+    .divider{ height:1px; background:var(--border); margin:10px 0; }
 
     #errorBox{
       margin-top:10px;
@@ -169,6 +155,27 @@
       word-break:break-word;
       display:none;
     }
+
+    /* Loading overlay */
+    #overlay{
+      position:absolute;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background: rgba(255,255,255,0.72);
+      z-index:10;
+    }
+    #overlay .card{
+      width:min(520px, 92vw);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:16px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    }
+    #overlay .title{ font-weight:800; margin-bottom:8px; }
+    #overlay .msg{ color:var(--muted); font-size:13px; line-height:1.35; }
   </style>
 </head>
 
@@ -210,12 +217,18 @@
       <div id="errorBox"></div>
 
       <div class="hint">
-        If your IFC is large, first load can take time. If it fails, the red box will show why.
+        If it fails, the red box shows why. If your IFC is huge, first load can take time.
       </div>
     </div>
 
     <!-- Middle viewer -->
     <div id="viewerWrap">
+      <div id="overlay">
+        <div class="card">
+          <div class="title">Loading IFC…</div>
+          <div id="overlayMsg" class="msg">Parsing + generating geometry…</div>
+        </div>
+      </div>
       <div id="viewer"></div>
     </div>
 
@@ -231,7 +244,6 @@
   </div>
 
   <script type="module">
-    // ✅ ESM CDN imports (bundled + browser-safe, no importmap needed)
     import * as THREE from "https://esm.sh/three@0.155.0";
     import { IfcViewerAPI } from "https://esm.sh/web-ifc-viewer@1.0.218";
 
@@ -242,6 +254,8 @@
     const clearBtn = document.getElementById("clearBtn");
     const errorBox = document.getElementById("errorBox");
     const viewerWrap = document.getElementById("viewerWrap");
+    const overlay = document.getElementById("overlay");
+    const overlayMsg = document.getElementById("overlayMsg");
 
     let viewer = null;
     let currentModelID = null;
@@ -256,6 +270,11 @@
     function clearError(){
       errorBox.style.display = "none";
       errorBox.textContent = "";
+    }
+
+    function setOverlay(on, msg){
+      overlay.style.display = on ? "flex" : "none";
+      if (msg) overlayMsg.textContent = msg;
     }
 
     function escapeHtml(v){
@@ -276,8 +295,7 @@
         backgroundColor: new THREE.Color(0xffffff)
       });
 
-      // WASM path for IFC parsing
-      // Using unpkg folder (contains the WASM file)
+      // IMPORTANT: web-ifc needs WASM from a directory
       viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.66/");
 
       viewer.axes.setAxes();
@@ -295,22 +313,63 @@
       }
       clearInfo();
       setStatus("Model cleared.");
-      // Note: we do NOT clear the file input; the file remains selected.
     }
 
-    async function loadIfcFromFile(file){
+    // ✅ Robust load: try loadIfc(file) first, then fallback to loadIfcUrl(url)
+    async function loadIfcRobust(file){
       if (!viewer) initViewer();
 
-      setStatus("Loading IFC… (large files may take time)");
+      clearError();
       clearInfo();
+      setOverlay(true, "Reading file…");
+      setStatus("Loading IFC…");
 
-      clearModel(); // clears previous model if any
+      // clear previous model
+      clearModel();
 
-      const model = await viewer.IFC.loadIfc(file, true);
-      currentModelID = model.modelID;
+      const url = URL.createObjectURL(file);
 
-      try { viewer.context.fitToFrame(); } catch (e) {}
-      setStatus("Model loaded ✅ Click any element to see info.");
+      // 1) Try loadIfc(file, ...)
+      try{
+        setOverlay(true, "Parsing IFC (method A)…");
+        if (typeof viewer.IFC.loadIfc === "function") {
+          const modelA = await viewer.IFC.loadIfc(file, true);
+
+          if (modelA && typeof modelA.modelID === "number") {
+            currentModelID = modelA.modelID;
+            setOverlay(true, "Finishing…");
+            try { viewer.context.fitToFrame(); } catch(e) {}
+            setOverlay(false);
+            setStatus("Model loaded ✅ Click elements to see info.");
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore and fallback
+      }
+
+      // 2) Fallback: loadIfcUrl(url)
+      try{
+        setOverlay(true, "Parsing IFC (method B)…");
+        if (typeof viewer.IFC.loadIfcUrl === "function") {
+          const modelB = await viewer.IFC.loadIfcUrl(url);
+
+          if (modelB && typeof modelB.modelID === "number") {
+            currentModelID = modelB.modelID;
+            setOverlay(true, "Finishing…");
+            try { viewer.context.fitToFrame(); } catch(e) {}
+            setOverlay(false);
+            setStatus("Model loaded ✅ Click elements to see info.");
+            return;
+          }
+        }
+      } catch (e) {
+        setOverlay(false);
+        throw e;
+      }
+
+      setOverlay(false);
+      throw new Error("IFC loaded returned null. The IFC may be invalid/unsupported, or WASM failed to load.");
     }
 
     async function pickAndShowInfo(){
@@ -332,7 +391,7 @@
       `;
     }
 
-    // Init immediately (so you never see "viewer not initialized")
+    // Init now
     try{
       initViewer();
     }catch(err){
@@ -343,38 +402,42 @@
 
     // File select
     fileInput.addEventListener("change", async (e) => {
-      clearError();
       const file = e.target.files?.[0];
       if (!file) return;
 
       try{
-        await loadIfcFromFile(file);
+        await loadIfcRobust(file);
       }catch(err){
         console.error(err);
-        showError("IFC load failed:\n" + (err?.stack || err?.message || String(err)));
+        showError(
+          "IFC load failed.\n\n" +
+          "Try:\n" +
+          "1) Export as IFC4 or IFC2x3 from Revit/Archicad\n" +
+          "2) Test with a smaller IFC to confirm viewer works\n" +
+          "3) Rename file to English (recommended)\n\n" +
+          "Error:\n" + (err?.stack || err?.message || String(err))
+        );
         setStatus("Failed to load IFC ❌");
       }
     });
 
-    // Reset camera
     resetBtn.addEventListener("click", () => {
       if (!viewer) return;
       try { viewer.context.fitToFrame(); } catch (e) {}
       setStatus("Camera reset.");
     });
 
-    // Clear model
     clearBtn.addEventListener("click", () => {
       clearError();
+      setOverlay(false);
       clearModel();
     });
 
-    // Click to pick
     viewerWrap.addEventListener("click", async () => {
       try { await pickAndShowInfo(); } catch (e) {}
     });
 
-    // Placeholders for next steps
+    // Placeholders
     document.getElementById("roomsOnly").addEventListener("change", (e) => {
       setStatus(e.target.checked ? "Rooms only: ON (filtering next)" : "Rooms only: OFF");
     });
