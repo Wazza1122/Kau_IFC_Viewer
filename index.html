@@ -1,364 +1,193 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KAU IFC Viewer</title>
+<meta charset="UTF-8" />
+<title>KAU IFC Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    :root{
-      --kau-green:#0b6b3a;
-      --bg:#ffffff;
-      --panel:#f2f3f5;
-      --panel2:#e6e7ea;
-      --text:#111;
-      --muted:#666;
-      --border:#d7d9de;
-      --btn:#e9eaee;
-      --btn-hover:#dfe1e7;
-      --danger:#b91c1c;
-    }
-    *{ box-sizing:border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    body{ margin:0; background:var(--bg); color:var(--text); }
+<style>
+body {
+  margin: 0;
+  font-family: system-ui, Arial;
+  background: #ffffff;
+}
 
-    .topbar{ background:var(--kau-green); color:#fff; padding:10px 14px; display:flex; align-items:center; justify-content:center; font-weight:600; }
-    .toolbar{ display:flex; gap:10px; align-items:center; padding:10px 12px; background:var(--panel); border-bottom:1px solid var(--border); }
-    .toolbar .label{ font-size:14px; font-weight:600; white-space:nowrap; }
+header {
+  background: #0b6b3a;
+  color: white;
+  padding: 10px;
+  text-align: center;
+  font-weight: 600;
+}
 
-    input[type="file"]{
-      width:240px; max-width:240px; padding:6px;
-      background:#fff; border:1px solid var(--border); border-radius:8px;
-    }
+.toolbar {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: #f2f2f2;
+  border-bottom: 1px solid #ccc;
+}
 
-    .btn{
-      padding:8px 10px; border:1px solid var(--border); background:var(--btn);
-      border-radius:10px; cursor:pointer; font-weight:600; white-space:nowrap;
-    }
-    .btn:hover{ background:var(--btn-hover); }
+input[type="file"] {
+  width: 220px;
+}
 
-    .status{
-      margin-left:auto; font-size:13px; color:var(--muted);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:45vw;
-    }
+button {
+  padding: 6px 10px;
+  background: #e5e5e5;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  cursor: pointer;
+}
 
-    .main{
-      height: calc(100vh - 48px - 52px);
-      display:grid; grid-template-columns: 280px 1fr 320px;
-      gap:10px; padding:10px;
-    }
+main {
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  height: calc(100vh - 92px);
+}
 
-    .panel{
-      background:var(--panel); border:1px solid var(--border);
-      border-radius:14px; padding:10px; overflow:auto;
-    }
-    .panel h3{ margin:0 0 8px 0; font-size:14px; }
+.panel {
+  padding: 10px;
+  border-right: 1px solid #ddd;
+  background: #f8f8f8;
+  overflow: auto;
+}
 
-    #viewerWrap{
-      background:#fff; border:1px solid var(--border);
-      border-radius:14px; overflow:hidden; position:relative;
-    }
-    #viewer{ position:absolute; inset:0; }
+#viewer {
+  width: 100%;
+  height: 100%;
+}
 
-    .toggle{
-      display:flex; align-items:center; gap:8px; padding:8px;
-      background:var(--panel2); border:1px solid var(--border);
-      border-radius:12px; font-size:13px; width:100%;
-    }
-
-    .floorList .btn{ width:100%; text-align:left; margin:6px 0; }
-    .hint{ font-size:12px; color:var(--muted); line-height:1.35; margin-top:8px; }
-    .kv{ font-size:13px; line-height:1.5; }
-    .kv b{ display:inline-block; min-width:120px; }
-    .divider{ height:1px; background:var(--border); margin:10px 0; }
-
-    #errorBox{
-      margin-top:10px; padding:10px; border:1px solid var(--border);
-      border-radius:12px; background:#fff; color:var(--danger);
-      font-size:12px; white-space:pre-wrap; word-break:break-word; display:none;
-    }
-
-    #overlay{
-      position:absolute; inset:0; display:none; align-items:center; justify-content:center;
-      background: rgba(255,255,255,0.72); z-index:10;
-    }
-    #overlay .card{
-      width:min(520px, 92vw); background:#fff; border:1px solid var(--border);
-      border-radius:14px; padding:16px; box-shadow: 0 12px 30px rgba(0,0,0,0.12);
-    }
-    #overlay .title{ font-weight:800; margin-bottom:8px; }
-    #overlay .msg{ color:var(--muted); font-size:13px; line-height:1.35; }
-  </style>
+#info {
+  font-size: 14px;
+}
+</style>
 </head>
 
 <body>
-  <div class="topbar">Architecture and Design College — King Abdulaziz University</div>
 
-  <div class="toolbar">
-    <div class="label">Load IFC</div>
-    <input id="fileInput" type="file" accept=".ifc" />
-    <button id="resetBtn" class="btn" type="button">Reset Camera</button>
-    <button id="clearBtn" class="btn" type="button">Clear Model</button>
-    <div id="status" class="status">Ready.</div>
+<header>
+Architecture and Design College — King Abdulaziz University
+</header>
+
+<div class="toolbar">
+  <input id="fileInput" type="file" accept=".ifc">
+  <button id="resetBtn">Reset View</button>
+  <span id="status">Ready</span>
+</div>
+
+<main>
+  <div class="panel">
+    <b>Floors</b><br><br>
+    Floor controls coming next
   </div>
 
-  <div class="main">
-    <div class="panel">
-      <h3>Controls</h3>
-      <div class="toggle">
-        <input id="roomsOnly" type="checkbox" />
-        <label for="roomsOnly">Rooms only (we’ll connect this next)</label>
-      </div>
+  <div id="viewer"></div>
 
-      <div class="divider"></div>
-
-      <h3>Floors</h3>
-      <div class="floorList">
-        <button class="btn" type="button" data-floor="lower">Lower Floor</button>
-        <button class="btn" type="button" data-floor="1">Floor 1</button>
-        <button class="btn" type="button" data-floor="2">Floor 2</button>
-        <button class="btn" type="button" data-floor="3">Floor 3</button>
-        <button class="btn" type="button" data-floor="4">Floor 4</button>
-        <button class="btn" type="button" data-floor="all">Whole Building</button>
-      </div>
-
-      <div id="errorBox"></div>
-
-      <div class="hint">
-        If loading fails, the red box will tell you whether WASM loaded correctly.
-      </div>
-    </div>
-
-    <div id="viewerWrap">
-      <div id="overlay">
-        <div class="card">
-          <div class="title">Loading IFC…</div>
-          <div id="overlayMsg" class="msg">Parsing + generating geometry…</div>
-        </div>
-      </div>
-      <div id="viewer"></div>
-    </div>
-
-    <div class="panel">
-      <h3>Selected Element Info</h3>
-      <div id="info" class="kv">Click any element in the model.</div>
-      <div class="divider"></div>
-      <div class="hint">Next: full properties + random room colors + real floor filtering.</div>
-    </div>
+  <div class="panel">
+    <b>Element Info</b>
+    <div id="info">Click an element</div>
   </div>
+</main>
 
-  <script type="module">
-    import * as THREE from "https://esm.sh/three@0.155.0";
-    import { IfcViewerAPI } from "https://esm.sh/web-ifc-viewer@1.0.218";
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
+import { OrbitControls } from "https://unpkg.com/three@0.155.0/examples/jsm/controls/OrbitControls.js";
+import { IFCLoader } from "https://unpkg.com/three@0.155.0/examples/jsm/loaders/IFCLoader.js";
 
-    const WASM_BASE = "https://unpkg.com/web-ifc@0.0.57/";
-    const WASM_URL  = WASM_BASE + "web-ifc.wasm";
+let scene, camera, renderer, controls;
+let ifcLoader, ifcModel;
 
-    const statusEl = document.getElementById("status");
-    const infoEl = document.getElementById("info");
-    const fileInput = document.getElementById("fileInput");
-    const resetBtn = document.getElementById("resetBtn");
-    const clearBtn = document.getElementById("clearBtn");
-    const errorBox = document.getElementById("errorBox");
-    const viewerWrap = document.getElementById("viewerWrap");
-    const overlay = document.getElementById("overlay");
-    const overlayMsg = document.getElementById("overlayMsg");
+init();
 
-    let viewer = null;
-    let currentModelID = null;
-    let wasmOk = false;
+function init() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
 
-    function setStatus(msg){ statusEl.textContent = msg; }
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(10, 10, 10);
 
-    function showError(msg){
-      errorBox.style.display = "block";
-      errorBox.textContent = msg;
-    }
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById("viewer").appendChild(renderer.domElement);
 
-    function clearError(){
-      errorBox.style.display = "none";
-      errorBox.textContent = "";
-    }
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
 
-    function setOverlay(on, msg){
-      overlay.style.display = on ? "flex" : "none";
-      if (msg) overlayMsg.textContent = msg;
-    }
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+  dirLight.position.set(5, 10, 5);
+  scene.add(dirLight);
 
-    function escapeHtml(v){
-      return String(v).replace(/[&<>"']/g, (m) => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-      }[m]));
-    }
+  ifcLoader = new IFCLoader();
+  ifcLoader.ifcManager.setWasmPath(
+    "https://unpkg.com/web-ifc@0.0.57/"
+  );
 
-    function clearInfo(){
-      infoEl.innerHTML = "Click any element in the model.";
-    }
+  window.addEventListener("resize", onResize);
+  renderer.domElement.addEventListener("click", pick);
 
-    async function testWasm(){
-      try{
-        const res = await fetch(WASM_URL, { method: "GET" });
-        wasmOk = res.ok;
-        if (!res.ok) {
-          showError("WASM fetch failed (HTTP " + res.status + ").\n" + WASM_URL);
-          setStatus("WASM missing ❌");
-        }
-      } catch (e) {
-        wasmOk = false;
-        showError("WASM fetch failed (network error).\n" + WASM_URL + "\n\n" + (e?.message || String(e)));
-        setStatus("WASM blocked ❌");
-      }
-    }
+  animate();
+}
 
-    function initViewer(){
-      const container = document.getElementById("viewer");
-      viewer = new IfcViewerAPI({
-        container,
-        backgroundColor: new THREE.Color(0xffffff)
-      });
+function animate() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
 
-      viewer.IFC.setWasmPath(WASM_BASE);
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
 
-      viewer.axes.setAxes();
-      viewer.grid.setGrid();
-      setStatus("Viewer ready. Choose an IFC file.");
-    }
+document.getElementById("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    function clearModel(){
-      if (!viewer) return;
-      if (currentModelID !== null){
-        try { viewer.IFC.loader.ifcManager.close(currentModelID); } catch (e) {}
-        currentModelID = null;
-      }
-      clearInfo();
-      setStatus("Model cleared.");
-    }
+  document.getElementById("status").textContent = "Loading IFC…";
 
-    async function loadIfcRobust(file){
-      if (!viewer) initViewer();
+  if (ifcModel) scene.remove(ifcModel);
 
-      clearError();
-      clearInfo();
-      setOverlay(true, "Checking WASM…");
-      setStatus("Loading IFC…");
+  const url = URL.createObjectURL(file);
+  ifcModel = await ifcLoader.loadAsync(url);
+  scene.add(ifcModel);
 
-      // Important: confirm WASM reachable before parsing
-      await testWasm();
-      if (!wasmOk) {
-        setOverlay(false);
-        throw new Error("web-ifc.wasm is not reachable. IFC parsing cannot run.");
-      }
+  document.getElementById("status").textContent = "Loaded ✔";
+});
 
-      clearModel();
+document.getElementById("resetBtn").onclick = () => {
+  controls.reset();
+};
 
-      // Try both methods depending on viewer build
-      let model = null;
+async function pick(event) {
+  if (!ifcModel) return;
 
-      // A) loadIfc(file)
-      try{
-        setOverlay(true, "Parsing IFC (method A)…");
-        if (typeof viewer.IFC.loadIfc === "function") {
-          model = await viewer.IFC.loadIfc(file, true);
-        }
-      } catch (e) {}
+  const mouse = new THREE.Vector2(
+    (event.clientX / window.innerWidth) * 2 - 1,
+    -(event.clientY / window.innerHeight) * 2 + 1
+  );
 
-      // B) loadIfcUrl(objectUrl)
-      if (!model) {
-        try{
-          setOverlay(true, "Parsing IFC (method B)…");
-          const url = URL.createObjectURL(file);
-          if (typeof viewer.IFC.loadIfcUrl === "function") {
-            model = await viewer.IFC.loadIfcUrl(url);
-          }
-        } catch (e) {}
-      }
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
 
-      if (!model || typeof model.modelID !== "number") {
-        setOverlay(false);
-        throw new Error(
-          "IFC parser returned null.\n" +
-          "- WASM OK: " + wasmOk + "\n" +
-          "- This usually means the IFC is too heavy for browser memory, or the export contains unsupported geometry.\n" +
-          "- Try a smaller IFC to confirm the viewer works."
-        );
-      }
+  const intersects = raycaster.intersectObject(ifcModel);
+  if (intersects.length === 0) return;
 
-      currentModelID = model.modelID;
+  const faceIndex = intersects[0].faceIndex;
+  const geometry = intersects[0].object.geometry;
+  const id = ifcLoader.ifcManager.getExpressId(geometry, faceIndex);
 
-      setOverlay(true, "Finishing…");
-      try { viewer.context.fitToFrame(); } catch(e) {}
-      setOverlay(false);
-      setStatus("Model loaded ✅ Click elements to see info.");
-    }
+  const props = await ifcLoader.ifcManager.getItemProperties(ifcModel.modelID, id);
 
-    async function pickAndShowInfo(){
-      if (!viewer || currentModelID === null) return;
+  document.getElementById("info").innerHTML = `
+    <b>Type:</b> ${props?.type || "-"}<br>
+    <b>GlobalId:</b> ${props?.GlobalId?.value || "-"}<br>
+    <b>Name:</b> ${props?.Name?.value || "-"}
+  `;
+}
+</script>
 
-      const result = await viewer.IFC.selector.pickIfcItem(false);
-      if (!result) return;
-
-      const props = await viewer.IFC.getProperties(result.modelID, result.id, true, true);
-
-      const name = props?.Name?.value ?? "-";
-      const globalId = props?.GlobalId?.value ?? "-";
-      const type = props?.type ?? "-";
-
-      infoEl.innerHTML = `
-        <div><b>Name:</b> ${escapeHtml(name)}</div>
-        <div><b>Type:</b> ${escapeHtml(type)}</div>
-        <div><b>GlobalId:</b> ${escapeHtml(globalId)}</div>
-      `;
-    }
-
-    // Start
-    try{
-      initViewer();
-      // optional immediate test (comment out if you want)
-      // await testWasm();
-    } catch (err) {
-      console.error(err);
-      showError("Viewer init failed:\n" + (err?.stack || err?.message || String(err)));
-      setStatus("Init failed ❌");
-    }
-
-    fileInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      try{
-        await loadIfcRobust(file);
-      }catch(err){
-        console.error(err);
-        setOverlay(false);
-        showError("IFC load failed:\n\n" + (err?.stack || err?.message || String(err)));
-        setStatus("Failed to load IFC ❌");
-      }
-    });
-
-    resetBtn.addEventListener("click", () => {
-      if (!viewer) return;
-      try { viewer.context.fitToFrame(); } catch (e) {}
-      setStatus("Camera reset.");
-    });
-
-    clearBtn.addEventListener("click", () => {
-      clearError();
-      setOverlay(false);
-      clearModel();
-    });
-
-    viewerWrap.addEventListener("click", async () => {
-      try { await pickAndShowInfo(); } catch (e) {}
-    });
-
-    document.getElementById("roomsOnly").addEventListener("change", (e) => {
-      setStatus(e.target.checked ? "Rooms only: ON (filtering next)" : "Rooms only: OFF");
-    });
-
-    document.querySelectorAll("[data-floor]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        setStatus(`Floor filter: ${btn.dataset.floor} (storey filtering next)`);
-      });
-    });
-  </script>
 </body>
 </html>
