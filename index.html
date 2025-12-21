@@ -11,50 +11,84 @@
   --panel:#f2f3f5;
   --border:#d7d9de;
   --btn:#e9eaee;
+  --text:#111;
+  --muted:#666;
 }
-body{margin:0;font-family:system-ui;background:#fff;}
+*{ box-sizing:border-box; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+body{ margin:0; background:#fff; color:var(--text); }
+
 .topbar{
   background:var(--kau-green);
   color:#fff;
-  padding:10px;
+  padding:10px 14px;
   text-align:center;
   font-weight:600;
 }
+
 .toolbar{
   display:flex;
+  align-items:center;
   gap:10px;
-  padding:10px;
+  padding:10px 12px;
   background:var(--panel);
   border-bottom:1px solid var(--border);
 }
-input[type=file]{width:220px;}
-button{
-  background:var(--btn);
+
+input[type=file]{
+  width:240px;
+  padding:6px;
   border:1px solid var(--border);
-  border-radius:6px;
-  padding:6px 10px;
-  cursor:pointer;
+  border-radius:8px;
+  background:#fff;
 }
+
+button{
+  padding:8px 10px;
+  border:1px solid var(--border);
+  background:var(--btn);
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+}
+
+#status{
+  margin-left:auto;
+  font-size:13px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:45vw;
+}
+
 .main{
+  height: calc(100vh - 48px - 52px);
   display:grid;
-  grid-template-columns:260px 1fr 300px;
-  height:calc(100vh - 96px);
+  grid-template-columns: 280px 1fr 320px;
   gap:10px;
   padding:10px;
 }
+
 .panel{
   background:var(--panel);
   border:1px solid var(--border);
-  border-radius:12px;
+  border-radius:14px;
   padding:10px;
+  overflow:auto;
 }
+
 #viewerWrap{
-  position:relative;
+  background:#fff;
   border:1px solid var(--border);
-  border-radius:12px;
+  border-radius:14px;
   overflow:hidden;
+  position:relative;
+  min-height:320px;
 }
-canvas{
+
+#c{
+  position:absolute;
+  inset:0;
   width:100%;
   height:100%;
   display:block;
@@ -63,150 +97,196 @@ canvas{
 </head>
 
 <body>
+  <div class="topbar">Architecture and Design College — King Abdulaziz University</div>
 
-<div class="topbar">
-Architecture and Design College — King Abdulaziz University
-</div>
-
-<div class="toolbar">
-  <input id="fileInput" type="file" accept=".ifc">
-  <button id="resetBtn">Reset View</button>
-  <span id="status">Ready</span>
-</div>
-
-<div class="main">
-  <div class="panel">Floors (next)</div>
-
-  <div id="viewerWrap">
-    <canvas id="c"></canvas>
+  <div class="toolbar">
+    <input id="fileInput" type="file" accept=".ifc">
+    <button id="resetBtn" type="button">Reset View</button>
+    <button id="clearBtn" type="button">Clear Model</button>
+    <div id="status">Ready</div>
   </div>
 
-  <div class="panel">
-    <b>Element Info</b>
-    <div id="info">Click element</div>
+  <div class="main">
+    <div class="panel">
+      <b>Floors</b>
+      <div style="margin-top:10px; font-size:12px; color:var(--muted); line-height:1.4;">
+        Floor filtering comes next. For now, the goal is: grid shows + IFC loads + click shows info.
+      </div>
+    </div>
+
+    <div id="viewerWrap">
+      <canvas id="c"></canvas>
+    </div>
+
+    <div class="panel">
+      <b>Element Info</b>
+      <div id="info" style="margin-top:10px; font-size:13px; line-height:1.5;">
+        Click any element after loading an IFC.
+      </div>
+    </div>
   </div>
-</div>
 
 <script type="module">
-/* ✅ Correct, existing packages */
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js";
-import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/OrbitControls.js";
+  import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js";
+  import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/OrbitControls.js";
+  import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.126/IFCLoader.js";
 
-/* ✅ IFC loader comes from web-ifc-three */
-import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.126/IFCLoader.js";
+  var WASM_PATH = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
 
-/* ✅ WASM */
-const WASM_PATH = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
+  var canvas = document.getElementById("c");
+  var statusEl = document.getElementById("status");
+  var infoEl = document.getElementById("info");
+  var fileInput = document.getElementById("fileInput");
+  var resetBtn = document.getElementById("resetBtn");
+  var clearBtn = document.getElementById("clearBtn");
 
-const canvas = document.getElementById("c");
-const status = document.getElementById("status");
-const info = document.getElementById("info");
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xffffff);
+  var camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+  camera.position.set(15, 12, 15);
 
-const camera = new THREE.PerspectiveCamera(60,1,0.1,2000);
-camera.position.set(15,12,15);
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
 
-const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias:true});
-renderer.setPixelRatio(window.devicePixelRatio);
+  var controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
 
-const controls = new OrbitControls(camera,renderer.domElement);
-controls.enableDamping = true;
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  var dir = new THREE.DirectionalLight(0xffffff, 0.6);
+  dir.position.set(10, 20, 10);
+  scene.add(dir);
 
-/* Lights */
-scene.add(new THREE.AmbientLight(0xffffff,0.8));
-const dir = new THREE.DirectionalLight(0xffffff,0.6);
-dir.position.set(10,20,10);
-scene.add(dir);
+  // ✅ GRID + AXES (should appear immediately)
+  scene.add(new THREE.GridHelper(100, 100));
+  scene.add(new THREE.AxesHelper(5));
 
-/* ✅ Grid + axes (visible immediately) */
-scene.add(new THREE.GridHelper(100,100));
-scene.add(new THREE.AxesHelper(5));
+  // IFC
+  var ifcLoader = new IFCLoader();
+  ifcLoader.ifcManager.setWasmPath(WASM_PATH);
 
-/* IFC */
-const ifcLoader = new IFCLoader();
-ifcLoader.ifcManager.setWasmPath(WASM_PATH);
+  var ifcModel = null;
 
-let ifcModel = null;
-
-/* Resize */
-function resize(){
-  const w = canvas.parentElement.clientWidth;
-  const h = canvas.parentElement.clientHeight;
-  renderer.setSize(w,h,false);
-  camera.aspect = w/h;
-  camera.updateProjectionMatrix();
-}
-new ResizeObserver(resize).observe(canvas.parentElement);
-resize();
-
-/* Render loop */
-function animate(){
-  controls.update();
-  renderer.render(scene,camera);
-  requestAnimationFrame(animate);
-}
-animate();
-
-/* Load IFC */
-document.getElementById("fileInput").onchange = async e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-
-  status.textContent = "Loading IFC...";
-
-  if(ifcModel){
-    scene.remove(ifcModel);
-    ifcModel = null;
+  function resize() {
+    var parent = canvas.parentElement;
+    var w = parent.clientWidth;
+    var h = parent.clientHeight;
+    if (w < 300) w = 300;
+    if (h < 300) h = 300;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
   }
 
-  const url = URL.createObjectURL(file);
-  ifcModel = await ifcLoader.loadAsync(url);
-  scene.add(ifcModel);
+  var ro = new ResizeObserver(function() { resize(); });
+  ro.observe(canvas.parentElement);
+  resize();
 
-  controls.reset();
-  status.textContent = "Loaded ✔";
-};
+  function animate() {
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+  animate();
 
-/* Picking */
-canvas.addEventListener("click", async e=>{
-  if(!ifcModel) return;
+  function safeVal(v) {
+    if (v === null || v === undefined) return "-";
+    return String(v);
+  }
 
-  const r = canvas.getBoundingClientRect();
-  const mouse = new THREE.Vector2(
-    ((e.clientX-r.left)/r.width)*2-1,
-    -((e.clientY-r.top)/r.height)*2+1
-  );
+  function getPropValue(props, key) {
+    if (!props) return "-";
+    if (!props[key]) return "-";
+    // IFC props often like { value: "..." }
+    if (props[key].value !== undefined && props[key].value !== null) return String(props[key].value);
+    return String(props[key]);
+  }
 
-  const ray = new THREE.Raycaster();
-  ray.setFromCamera(mouse,camera);
+  function setInfoHtml(name, type, gid) {
+    infoEl.innerHTML =
+      "<div><b>Name:</b> " + safeVal(name) + "</div>" +
+      "<div><b>Type:</b> " + safeVal(type) + "</div>" +
+      "<div><b>GlobalId:</b> " + safeVal(gid) + "</div>";
+  }
 
-  const hit = ray.intersectObject(ifcModel)[0];
-  if(!hit) return;
+  function clearInfo() {
+    infoEl.textContent = "Click any element after loading an IFC.";
+  }
 
-  const id = ifcLoader.ifcManager.getExpressId(
-    hit.object.geometry,
-    hit.faceIndex
-  );
+  fileInput.addEventListener("change", function(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
 
-  const props = await ifcLoader.ifcManager.getItemProperties(
-    ifcModel.modelID,
-    id,
-    true
-  );
+    statusEl.textContent = "Loading IFC…";
 
-  info.innerHTML =
-    "<div><b>Name:</b> " + (props.Name?.value || "-") + "</div>" +
-    "<div><b>Type:</b> " + (props.type || "-") + "</div>" +
-    "<div><b>GlobalId:</b> " + (props.GlobalId?.value || "-") + "</div>";
-};
+    // Remove old model
+    if (ifcModel) {
+      scene.remove(ifcModel);
+      ifcModel = null;
+    }
+    clearInfo();
 
-/* Reset */
-document.getElementById("resetBtn").onclick = ()=>{
-  controls.reset();
-};
+    var url = URL.createObjectURL(file);
+
+    ifcLoader.loadAsync(url).then(function(model) {
+      ifcModel = model;
+      scene.add(ifcModel);
+      controls.reset();
+      statusEl.textContent = "Loaded ✔ Click elements.";
+    }).catch(function(err) {
+      console.error(err);
+      statusEl.textContent = "Load failed ❌";
+      infoEl.textContent = "IFC load failed. Check console for details.";
+    });
+  });
+
+  resetBtn.addEventListener("click", function() {
+    controls.reset();
+    statusEl.textContent = "View reset.";
+  });
+
+  clearBtn.addEventListener("click", function() {
+    if (ifcModel) {
+      scene.remove(ifcModel);
+      ifcModel = null;
+    }
+    clearInfo();
+    statusEl.textContent = "Model cleared.";
+    // keep file selection as-is (don’t reset file input)
+  });
+
+  canvas.addEventListener("click", function(e) {
+    if (!ifcModel) return;
+
+    var rect = canvas.getBoundingClientRect();
+    var x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    var y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+
+    var mouse = new THREE.Vector2(x, y);
+    var ray = new THREE.Raycaster();
+    ray.setFromCamera(mouse, camera);
+
+    var hits = ray.intersectObject(ifcModel, true);
+    if (!hits || hits.length === 0) return;
+
+    var hit = hits[0];
+    if (hit.faceIndex === undefined || hit.faceIndex === null) return;
+
+    var expressId = ifcLoader.ifcManager.getExpressId(hit.object.geometry, hit.faceIndex);
+
+    ifcLoader.ifcManager.getItemProperties(ifcModel.modelID, expressId, true).then(function(props) {
+      var name = getPropValue(props, "Name");
+      var gid = getPropValue(props, "GlobalId");
+      var type = props && props.type ? String(props.type) : "-";
+      setInfoHtml(name, type, gid);
+    }).catch(function(err) {
+      console.error(err);
+      infoEl.textContent = "Failed to read properties (see console).";
+    });
+  });
+
+  statusEl.textContent = "Viewer ready (grid should be visible).";
 </script>
-
 </body>
 </html>
