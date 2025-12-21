@@ -5,80 +5,261 @@
   <title>KAU IFC Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Three.js + IFC.js -->
+  <!-- Three.js + web-ifc + IFC viewer -->
   <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
   <script src="https://unpkg.com/web-ifc@0.0.57/web-ifc-api.js"></script>
   <script src="https://unpkg.com/ifc-viewer@1.0.250/dist/ifc-viewer.js"></script>
 
   <style>
+    :root{
+      --kau-green:#006C35;
+      --bg:#ffffff;
+      --panel:#f3f4f6;     /* light gray */
+      --border:#d1d5db;    /* gray */
+      --text:#111827;      /* near-black */
+      --muted:#4b5563;     /* gray text */
+      --btn:#e5e7eb;       /* button gray */
+      --btnHover:#d1d5db;
+    }
+
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       overflow: hidden;
       font-family: Arial, sans-serif;
-      background: #0b0f0d;
-      color: white;
+      background: var(--bg);
+      color: var(--text);
     }
 
     header {
-      height: 60px;
-      background: #006C35;
+      height: 64px;
+      background: var(--kau-green);
+      color: white;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: bold;
+      font-weight: 800;
       font-size: 18px;
+      letter-spacing: 0.2px;
     }
 
+    /* Top control bar (gray) */
+    .top-controls{
+      position: absolute;
+      top: 74px;
+      left: 12px;
+      right: 12px;
+      height: 54px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px;
+      z-index: 20;
+    }
+
+    .top-controls .label{
+      font-weight: 700;
+      color: var(--muted);
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+
+    .btn{
+      background: var(--btn);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .btn:hover{ background: var(--btnHover); }
+
+    .file{
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      flex: 1;
+      min-width: 160px;
+    }
+
+    /* Viewer fills screen under header */
     #viewer {
       width: 100%;
-      height: calc(100% - 60px);
+      height: calc(100% - 64px);
+      background: white;
     }
 
-    #fileInput {
-      position: absolute;
-      top: 70px;
-      left: 10px;
-      z-index: 10;
-      background: #111;
-      color: white;
-      padding: 6px;
-      border-radius: 4px;
+    /* Loading overlay */
+    .overlay{
+      position:absolute;
+      inset: 64px 0 0 0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index: 30;
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(2px);
+    }
+    .overlay .card{
+      width: min(520px, 92vw);
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    }
+    .overlay .title{
+      font-weight: 900;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .overlay .msg{
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      margin-bottom: 12px;
+    }
+    .overlay .bar{
+      height: 10px;
+      background: #eee;
+      border-radius: 999px;
+      overflow:hidden;
+      border: 1px solid var(--border);
+    }
+    .overlay .bar > div{
+      height: 100%;
+      width: 35%;
+      background: var(--kau-green);
+      border-radius: 999px;
+      animation: indeterminate 1.1s infinite ease-in-out;
+    }
+    @keyframes indeterminate{
+      0%{ transform: translateX(-60%); width: 30%; }
+      50%{ transform: translateX(40%); width: 45%; }
+      100%{ transform: translateX(160%); width: 30%; }
+    }
+
+    /* Status text */
+    #statusText{
+      position:absolute;
+      bottom: 10px;
+      left: 12px;
+      right: 12px;
+      background: rgba(243,244,246,0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      z-index: 20;
+      color: var(--muted);
+      font-size: 13px;
     }
   </style>
 </head>
 
 <body>
+  <header>Architecture and Design College — King Abdulaziz University</header>
 
-  <header>
-    Architecture and Design College — King Abdulaziz University
-  </header>
-
-  <input type="file" id="fileInput" accept=".ifc" />
+  <div class="top-controls">
+    <span class="label">Load IFC:</span>
+    <input type="file" id="fileInput" class="file" accept=".ifc" />
+    <button id="btnReset" class="btn">Reset View</button>
+  </div>
 
   <div id="viewer"></div>
 
+  <div id="statusText">Ready. Choose an IFC file (renaming to English is recommended).</div>
+
+  <div id="overlay" class="overlay">
+    <div class="card">
+      <div class="title">Loading IFC…</div>
+      <div id="overlayMsg" class="msg">
+        This can take time for large IFC files because the browser is converting the model to 3D geometry.
+      </div>
+      <div class="bar"><div></div></div>
+    </div>
+  </div>
+
   <script>
     const container = document.getElementById("viewer");
-    const viewer = new IfcViewerAPI({ container });
+    const statusText = document.getElementById("statusText");
+    const overlay = document.getElementById("overlay");
+    const overlayMsg = document.getElementById("overlayMsg");
+    const fileInput = document.getElementById("fileInput");
+    const btnReset = document.getElementById("btnReset");
 
-    viewer.axes.setAxes();
-    viewer.grid.setGrid();
+    // White background
+    const viewer = new IfcViewerAPI({ container, backgroundColor: 0xffffff });
 
+    // Optional helpers (these can slow slightly on huge models; you can disable if needed)
+    // viewer.axes.setAxes();
+    // viewer.grid.setGrid();
+
+    // WASM path
     viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.57/");
 
-    const fileInput = document.getElementById("fileInput");
+    // Small performance hints (safe)
+    try {
+      // reduce some render overhead
+      viewer.context.renderer.physicallyCorrectLights = false;
+      viewer.context.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      viewer.context.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    } catch (e) {}
+
+    function setOverlay(on, msg) {
+      overlay.style.display = on ? "flex" : "none";
+      if (msg) overlayMsg.textContent = msg;
+    }
+
+    function setStatus(msg) {
+      statusText.textContent = msg;
+    }
 
     fileInput.addEventListener("change", async (event) => {
-      const file = event.target.files[0];
+      const file = event.target.files && event.target.files[0];
       if (!file) return;
 
+      // Suggest rename (not required)
+      setStatus(`Selected: ${file.name} — starting load…`);
+
+      setOverlay(true, "Reading file…");
+      await new Promise(r => setTimeout(r, 50));
+
       const url = URL.createObjectURL(file);
-      await viewer.IFC.loadIfcUrl(url);
-      viewer.context.fitToFrame();
+
+      try {
+        setOverlay(true, "Parsing IFC and generating 3D geometry (this is the slow part) …");
+        await viewer.IFC.loadIfcUrl(url);
+
+        setOverlay(true, "Finishing…");
+        viewer.context.fitToFrame();
+
+        setOverlay(false);
+        setStatus("Loaded ✅ You can rotate/pan/zoom. Click elements (next step: info panel).");
+      } catch (err) {
+        console.error(err);
+        setOverlay(false);
+        setStatus("Error loading IFC. Try renaming the file to English and reload. Check console for details.");
+        alert("Error loading IFC. Try renaming file to English and reloading.");
+      }
+    });
+
+    btnReset.addEventListener("click", () => {
+      try {
+        viewer.context.fitToFrame();
+        setStatus("View reset.");
+      } catch (e) {}
+    });
+
+    // Resize handling
+    window.addEventListener("resize", () => {
+      try { viewer.context.resize(); } catch (e) {}
     });
   </script>
-
 </body>
 </html>
