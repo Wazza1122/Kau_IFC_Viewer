@@ -1,193 +1,453 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>KAU IFC Viewer</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KAU IFC Viewer</title>
 
-<style>
-body {
-  margin: 0;
-  font-family: system-ui, Arial;
-  background: #ffffff;
-}
+  <style>
+    :root{
+      --kau-green:#0b6b3a;
+      --bg:#ffffff;
+      --panel:#f2f3f5;
+      --panel2:#e6e7ea;
+      --text:#111;
+      --muted:#666;
+      --border:#d7d9de;
+      --btn:#e9eaee;
+      --btn-hover:#dfe1e7;
+      --danger:#b91c1c;
+    }
 
-header {
-  background: #0b6b3a;
-  color: white;
-  padding: 10px;
-  text-align: center;
-  font-weight: 600;
-}
+    *{ box-sizing:border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body{ margin:0; background:var(--bg); color:var(--text); }
 
-.toolbar {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: #f2f2f2;
-  border-bottom: 1px solid #ccc;
-}
+    .topbar{
+      background:var(--kau-green);
+      color:#fff;
+      padding:10px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:600;
+      letter-spacing:.2px;
+    }
 
-input[type="file"] {
-  width: 220px;
-}
+    .toolbar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:10px 12px;
+      background:var(--panel);
+      border-bottom:1px solid var(--border);
+    }
 
-button {
-  padding: 6px 10px;
-  background: #e5e5e5;
-  border: 1px solid #bbb;
-  border-radius: 6px;
-  cursor: pointer;
-}
+    .toolbar .label{
+      font-size:14px;
+      color:var(--text);
+      font-weight:600;
+      white-space: nowrap;
+    }
 
-main {
-  display: grid;
-  grid-template-columns: 260px 1fr 300px;
-  height: calc(100vh - 92px);
-}
+    /* Smaller input slot */
+    input[type="file"]{
+      width:240px;
+      max-width:240px;
+      padding:6px;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:8px;
+    }
 
-.panel {
-  padding: 10px;
-  border-right: 1px solid #ddd;
-  background: #f8f8f8;
-  overflow: auto;
-}
+    .btn{
+      padding:8px 10px;
+      border:1px solid var(--border);
+      background:var(--btn);
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+      white-space: nowrap;
+    }
+    .btn:hover{ background:var(--btn-hover); }
 
-#viewer {
-  width: 100%;
-  height: 100%;
-}
+    .status{
+      margin-left:auto;
+      font-size:13px;
+      color:var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:45vw;
+    }
 
-#info {
-  font-size: 14px;
-}
-</style>
+    .main{
+      height: calc(100vh - 48px - 52px);
+      display:grid;
+      grid-template-columns: 280px 1fr 320px;
+      gap:10px;
+      padding:10px;
+    }
+
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:10px;
+      overflow:auto;
+    }
+
+    .panel h3{
+      margin:0 0 8px 0;
+      font-size:14px;
+    }
+
+    #viewerWrap{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:14px;
+      overflow:hidden;
+      position:relative;
+      min-height: 300px;
+    }
+    #viewerCanvas{
+      position:absolute;
+      inset:0;
+      display:block;
+    }
+
+    .toggle{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:8px;
+      background:var(--panel2);
+      border:1px solid var(--border);
+      border-radius:12px;
+      font-size:13px;
+      width: 100%;
+      margin-bottom:10px;
+    }
+
+    .floorList .btn{
+      width:100%;
+      text-align:left;
+      margin:6px 0;
+    }
+
+    .hint{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.35;
+      margin-top:8px;
+    }
+
+    .kv{
+      font-size:13px;
+      line-height:1.5;
+    }
+    .kv b{ display:inline-block; min-width:120px; }
+
+    .divider{
+      height:1px;
+      background:var(--border);
+      margin:10px 0;
+    }
+
+    #errorBox{
+      margin-top:10px;
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+      color:var(--danger);
+      font-size:12px;
+      white-space:pre-wrap;
+      word-break:break-word;
+      display:none;
+    }
+
+    /* Loading overlay */
+    #overlay{
+      position:absolute;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background: rgba(255,255,255,0.72);
+      z-index:10;
+    }
+    #overlay .card{
+      width:min(520px, 92vw);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:16px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    }
+    #overlay .title{ font-weight:800; margin-bottom:8px; }
+    #overlay .msg{ color:var(--muted); font-size:13px; line-height:1.35; }
+  </style>
 </head>
 
 <body>
+  <div class="topbar">Architecture and Design College — King Abdulaziz University</div>
 
-<header>
-Architecture and Design College — King Abdulaziz University
-</header>
-
-<div class="toolbar">
-  <input id="fileInput" type="file" accept=".ifc">
-  <button id="resetBtn">Reset View</button>
-  <span id="status">Ready</span>
-</div>
-
-<main>
-  <div class="panel">
-    <b>Floors</b><br><br>
-    Floor controls coming next
+  <div class="toolbar">
+    <div class="label">Load IFC</div>
+    <input id="fileInput" type="file" accept=".ifc" />
+    <button id="resetBtn" class="btn" type="button">Reset View</button>
+    <button id="clearBtn" class="btn" type="button">Clear Model</button>
+    <div id="status" class="status">Ready.</div>
   </div>
 
-  <div id="viewer"></div>
+  <div class="main">
+    <!-- Left -->
+    <div class="panel">
+      <h3>Controls</h3>
 
-  <div class="panel">
-    <b>Element Info</b>
-    <div id="info">Click an element</div>
+      <div class="toggle">
+        <input id="roomsOnly" type="checkbox" />
+        <label for="roomsOnly">Rooms only (we’ll connect this next)</label>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3>Floors</h3>
+      <div class="floorList">
+        <button class="btn" type="button" data-floor="lower">Lower Floor</button>
+        <button class="btn" type="button" data-floor="1">Floor 1</button>
+        <button class="btn" type="button" data-floor="2">Floor 2</button>
+        <button class="btn" type="button" data-floor="3">Floor 3</button>
+        <button class="btn" type="button" data-floor="4">Floor 4</button>
+        <button class="btn" type="button" data-floor="all">Whole Building</button>
+      </div>
+
+      <div id="errorBox"></div>
+
+      <div class="hint">
+        Tip: big IFC files may take time on mobile. Desktop is recommended.
+      </div>
+    </div>
+
+    <!-- Middle viewer -->
+    <div id="viewerWrap">
+      <div id="overlay">
+        <div class="card">
+          <div class="title">Loading IFC…</div>
+          <div id="overlayMsg" class="msg">Parsing + building geometry…</div>
+        </div>
+      </div>
+      <canvas id="viewerCanvas"></canvas>
+    </div>
+
+    <!-- Right -->
+    <div class="panel">
+      <h3>Selected Element Info</h3>
+      <div id="info" class="kv">Click any element in the model.</div>
+      <div class="divider"></div>
+      <div class="hint">
+        Next: full properties + random room colors + real floor filtering + element toggles.
+      </div>
+    </div>
   </div>
-</main>
 
-<script type="module">
-import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
-import { OrbitControls } from "https://unpkg.com/three@0.155.0/examples/jsm/controls/OrbitControls.js";
-import { IFCLoader } from "https://unpkg.com/three@0.155.0/examples/jsm/loaders/IFCLoader.js";
+  <script type="module">
+    // ✅ Use jsDelivr for examples modules to avoid CORS blocks on unpkg
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/OrbitControls.js";
+    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/loaders/IFCLoader.js";
 
-let scene, camera, renderer, controls;
-let ifcLoader, ifcModel;
+    const WASM_BASE = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
 
-init();
+    const statusEl = document.getElementById("status");
+    const infoEl = document.getElementById("info");
+    const errorBox = document.getElementById("errorBox");
+    const overlay = document.getElementById("overlay");
+    const overlayMsg = document.getElementById("overlayMsg");
 
-function init() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xffffff);
+    const fileInput = document.getElementById("fileInput");
+    const resetBtn = document.getElementById("resetBtn");
+    const clearBtn = document.getElementById("clearBtn");
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
-  camera.position.set(10, 10, 10);
+    const viewerWrap = document.getElementById("viewerWrap");
+    const canvas = document.getElementById("viewerCanvas");
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.getElementById("viewer").appendChild(renderer.domElement);
+    let scene, camera, renderer, controls;
+    let ifcLoader, ifcModel;
 
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
+    function setStatus(msg){ statusEl.textContent = msg; }
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-  dirLight.position.set(5, 10, 5);
-  scene.add(dirLight);
+    function showError(msg){
+      errorBox.style.display = "block";
+      errorBox.textContent = msg;
+    }
 
-  ifcLoader = new IFCLoader();
-  ifcLoader.ifcManager.setWasmPath(
-    "https://unpkg.com/web-ifc@0.0.57/"
-  );
+    function clearError(){
+      errorBox.style.display = "none";
+      errorBox.textContent = "";
+    }
 
-  window.addEventListener("resize", onResize);
-  renderer.domElement.addEventListener("click", pick);
+    function setOverlay(on, msg){
+      overlay.style.display = on ? "flex" : "none";
+      if (msg) overlayMsg.textContent = msg;
+    }
 
-  animate();
-}
+    function escapeHtml(v){
+      return String(v).replace(/[&<>"']/g, (m) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+      }[m]));
+    }
 
-function animate() {
-  controls.update();
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
+    function clearInfo(){
+      infoEl.innerHTML = "Click any element in the model.";
+    }
 
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
+    function init(){
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xffffff);
 
-document.getElementById("fileInput").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+      camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
+      camera.position.set(12, 10, 12);
 
-  document.getElementById("status").textContent = "Loading IFC…";
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
-  if (ifcModel) scene.remove(ifcModel);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
 
-  const url = URL.createObjectURL(file);
-  ifcModel = await ifcLoader.loadAsync(url);
-  scene.add(ifcModel);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+      dir.position.set(10, 15, 8);
+      scene.add(dir);
 
-  document.getElementById("status").textContent = "Loaded ✔";
-});
+      // IFC Loader
+      ifcLoader = new IFCLoader();
+      ifcLoader.ifcManager.setWasmPath(WASM_BASE);
 
-document.getElementById("resetBtn").onclick = () => {
-  controls.reset();
-};
+      // Resize based on container (not window)
+      const ro = new ResizeObserver(() => resizeToContainer());
+      ro.observe(viewerWrap);
+      resizeToContainer();
 
-async function pick(event) {
-  if (!ifcModel) return;
+      renderer.domElement.addEventListener("click", pick);
 
-  const mouse = new THREE.Vector2(
-    (event.clientX / window.innerWidth) * 2 - 1,
-    -(event.clientY / window.innerHeight) * 2 + 1
-  );
+      animate();
+      setStatus("Viewer ready. Choose an IFC file.");
+    }
 
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera);
+    function resizeToContainer(){
+      const rect = viewerWrap.getBoundingClientRect();
+      const w = Math.max(300, Math.floor(rect.width));
+      const h = Math.max(300, Math.floor(rect.height));
 
-  const intersects = raycaster.intersectObject(ifcModel);
-  if (intersects.length === 0) return;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
 
-  const faceIndex = intersects[0].faceIndex;
-  const geometry = intersects[0].object.geometry;
-  const id = ifcLoader.ifcManager.getExpressId(geometry, faceIndex);
+    function animate(){
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
 
-  const props = await ifcLoader.ifcManager.getItemProperties(ifcModel.modelID, id);
+    async function loadIfcFile(file){
+      clearError();
+      clearInfo();
+      setOverlay(true, "Parsing IFC… (large files can take time)");
+      setStatus("Loading IFC…");
 
-  document.getElementById("info").innerHTML = `
-    <b>Type:</b> ${props?.type || "-"}<br>
-    <b>GlobalId:</b> ${props?.GlobalId?.value || "-"}<br>
-    <b>Name:</b> ${props?.Name?.value || "-"}
-  `;
-}
-</script>
+      // remove old model
+      if (ifcModel){
+        scene.remove(ifcModel);
+        try { ifcLoader.ifcManager.dispose(); } catch(e) {}
+        ifcModel = null;
+      }
 
+      const url = URL.createObjectURL(file);
+
+      // load
+      const model = await ifcLoader.loadAsync(url);
+      ifcModel = model;
+      scene.add(ifcModel);
+
+      // fit view
+      controls.reset();
+      setOverlay(false);
+      setStatus("Loaded ✅ Click any element.");
+    }
+
+    async function pick(event){
+      if (!ifcModel) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+
+      const mouse = new THREE.Vector2(x, y);
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObject(ifcModel);
+      if (!hits.length) return;
+
+      const faceIndex = hits[0].faceIndex;
+      const geom = hits[0].object.geometry;
+      const expressId = ifcLoader.ifcManager.getExpressId(geom, faceIndex);
+
+      const props = await ifcLoader.ifcManager.getItemProperties(ifcModel.modelID, expressId, true);
+
+      infoEl.innerHTML = `
+        <div><b>Name:</b> ${escapeHtml(props?.Name?.value ?? "-")}</div>
+        <div><b>Type:</b> ${escapeHtml(props?.type ?? "-")}</div>
+        <div><b>GlobalId:</b> ${escapeHtml(props?.GlobalId?.value ?? "-")}</div>
+      `;
+    }
+
+    // UI events
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try{
+        await loadIfcFile(file);
+      }catch(err){
+        console.error(err);
+        setOverlay(false);
+        showError("IFC load failed:\n" + (err?.stack || err?.message || String(err)));
+        setStatus("Failed ❌");
+      }
+    });
+
+    resetBtn.addEventListener("click", () => {
+      controls.reset();
+      setStatus("View reset.");
+    });
+
+    clearBtn.addEventListener("click", () => {
+      clearError();
+      setOverlay(false);
+      if (ifcModel){
+        scene.remove(ifcModel);
+        ifcModel = null;
+      }
+      clearInfo();
+      setStatus("Model cleared.");
+      // We do NOT clear file input (so it stays selected)
+    });
+
+    // placeholders
+    document.getElementById("roomsOnly").addEventListener("change", (e) => {
+      setStatus(e.target.checked ? "Rooms only: ON (we’ll implement filtering next)" : "Rooms only: OFF");
+    });
+
+    document.querySelectorAll("[data-floor]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        setStatus(`Floor filter: ${btn.dataset.floor} (we’ll connect storeys next)`);
+      });
+    });
+
+    init();
+  </script>
 </body>
 </html>
