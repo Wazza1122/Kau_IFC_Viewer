@@ -88,10 +88,14 @@ Architecture and Design College — King Abdulaziz University
 </div>
 
 <script type="module">
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
-import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js";
-import { IFCLoader } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/IFCLoader.js";
+/* ✅ Correct, existing packages */
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/OrbitControls.js";
 
+/* ✅ IFC loader comes from web-ifc-three */
+import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.126/IFCLoader.js";
+
+/* ✅ WASM */
 const WASM_PATH = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
 
 const canvas = document.getElementById("c");
@@ -110,19 +114,23 @@ renderer.setPixelRatio(window.devicePixelRatio);
 const controls = new OrbitControls(camera,renderer.domElement);
 controls.enableDamping = true;
 
+/* Lights */
 scene.add(new THREE.AmbientLight(0xffffff,0.8));
 const dir = new THREE.DirectionalLight(0xffffff,0.6);
 dir.position.set(10,20,10);
 scene.add(dir);
 
+/* ✅ Grid + axes (visible immediately) */
 scene.add(new THREE.GridHelper(100,100));
 scene.add(new THREE.AxesHelper(5));
 
+/* IFC */
 const ifcLoader = new IFCLoader();
 ifcLoader.ifcManager.setWasmPath(WASM_PATH);
 
 let ifcModel = null;
 
+/* Resize */
 function resize(){
   const w = canvas.parentElement.clientWidth;
   const h = canvas.parentElement.clientHeight;
@@ -133,6 +141,7 @@ function resize(){
 new ResizeObserver(resize).observe(canvas.parentElement);
 resize();
 
+/* Render loop */
 function animate(){
   controls.update();
   renderer.render(scene,camera);
@@ -140,7 +149,8 @@ function animate(){
 }
 animate();
 
-document.getElementById("fileInput").addEventListener("change", async function(e){
+/* Load IFC */
+document.getElementById("fileInput").onchange = async e=>{
   const file = e.target.files[0];
   if(!file) return;
 
@@ -152,21 +162,21 @@ document.getElementById("fileInput").addEventListener("change", async function(e
   }
 
   const url = URL.createObjectURL(file);
-  const model = await ifcLoader.loadAsync(url);
-  ifcModel = model;
+  ifcModel = await ifcLoader.loadAsync(url);
   scene.add(ifcModel);
 
   controls.reset();
   status.textContent = "Loaded ✔";
-});
+};
 
-canvas.addEventListener("click", async function(e){
+/* Picking */
+canvas.addEventListener("click", async e=>{
   if(!ifcModel) return;
 
-  const rect = canvas.getBoundingClientRect();
+  const r = canvas.getBoundingClientRect();
   const mouse = new THREE.Vector2(
-    ((e.clientX - rect.left) / rect.width) * 2 - 1,
-    -((e.clientY - rect.top) / rect.height) * 2 + 1
+    ((e.clientX-r.left)/r.width)*2-1,
+    -((e.clientY-r.top)/r.height)*2+1
   );
 
   const ray = new THREE.Raycaster();
@@ -190,11 +200,12 @@ canvas.addEventListener("click", async function(e){
     "<div><b>Name:</b> " + (props.Name?.value || "-") + "</div>" +
     "<div><b>Type:</b> " + (props.type || "-") + "</div>" +
     "<div><b>GlobalId:</b> " + (props.GlobalId?.value || "-") + "</div>";
-});
+};
 
-document.getElementById("resetBtn").addEventListener("click", function(){
+/* Reset */
+document.getElementById("resetBtn").onclick = ()=>{
   controls.reset();
-});
+};
 </script>
 
 </body>
