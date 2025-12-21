@@ -88,12 +88,10 @@ Architecture and Design College — King Abdulaziz University
 </div>
 
 <script type="module">
-/* ✅ WORKING versions */
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js";
 import { IFCLoader } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/IFCLoader.js";
 
-/* ✅ WASM */
 const WASM_PATH = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
 
 const canvas = document.getElementById("c");
@@ -106,23 +104,20 @@ scene.background = new THREE.Color(0xffffff);
 const camera = new THREE.PerspectiveCamera(60,1,0.1,2000);
 camera.position.set(15,12,15);
 
-const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setPixelRatio(devicePixelRatio);
+const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias:true});
+renderer.setPixelRatio(window.devicePixelRatio);
 
 const controls = new OrbitControls(camera,renderer.domElement);
 controls.enableDamping = true;
 
-/* Lights */
 scene.add(new THREE.AmbientLight(0xffffff,0.8));
 const dir = new THREE.DirectionalLight(0xffffff,0.6);
 dir.position.set(10,20,10);
 scene.add(dir);
 
-/* ✅ GRID + AXES (YOU WILL SEE THIS IMMEDIATELY) */
 scene.add(new THREE.GridHelper(100,100));
 scene.add(new THREE.AxesHelper(5));
 
-/* IFC */
 const ifcLoader = new IFCLoader();
 ifcLoader.ifcManager.setWasmPath(WASM_PATH);
 
@@ -145,50 +140,61 @@ function animate(){
 }
 animate();
 
-/* Load IFC */
-document.getElementById("fileInput").onchange = async e=>{
+document.getElementById("fileInput").addEventListener("change", async function(e){
   const file = e.target.files[0];
   if(!file) return;
 
   status.textContent = "Loading IFC...";
-  if(ifcModel) scene.remove(ifcModel);
+
+  if(ifcModel){
+    scene.remove(ifcModel);
+    ifcModel = null;
+  }
 
   const url = URL.createObjectURL(file);
-  ifcModel = await ifcLoader.loadAsync(url);
+  const model = await ifcLoader.loadAsync(url);
+  ifcModel = model;
   scene.add(ifcModel);
 
   controls.reset();
   status.textContent = "Loaded ✔";
-};
+});
 
-/* Picking */
-canvas.addEventListener("click", async e=>{
+canvas.addEventListener("click", async function(e){
   if(!ifcModel) return;
 
-  const r = canvas.getBoundingClientRect();
+  const rect = canvas.getBoundingClientRect();
   const mouse = new THREE.Vector2(
-    ((e.clientX-r.left)/r.width)*2-1,
-    -((e.clientY-r.top)/r.height)*2+1
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
   );
+
   const ray = new THREE.Raycaster();
   ray.setFromCamera(mouse,camera);
 
   const hit = ray.intersectObject(ifcModel)[0];
   if(!hit) return;
 
-  const id = ifcLoader.ifcManager.getExpressId(hit.object.geometry,hit.faceIndex);
-  const props = await ifcLoader.ifcManager.getItemProperties(ifcModel.modelID,id,true);
+  const id = ifcLoader.ifcManager.getExpressId(
+    hit.object.geometry,
+    hit.faceIndex
+  );
 
-  info.innerHTML = `
-    <div><b>Name:</b> ${props?.Name?.value||"-"}</div>
-    <div><b>Type:</b> ${props?.type||"-"}</div>
-    <div><b>GlobalId:</b> ${props?.GlobalId?.value||"-"}</div>
-  `;
-};
+  const props = await ifcLoader.ifcManager.getItemProperties(
+    ifcModel.modelID,
+    id,
+    true
+  );
 
-document.getElementById("resetBtn").onclick=()=>{
+  info.innerHTML =
+    "<div><b>Name:</b> " + (props.Name?.value || "-") + "</div>" +
+    "<div><b>Type:</b> " + (props.type || "-") + "</div>" +
+    "<div><b>GlobalId:</b> " + (props.GlobalId?.value || "-") + "</div>";
+});
+
+document.getElementById("resetBtn").addEventListener("click", function(){
   controls.reset();
-};
+});
 </script>
 
 </body>
