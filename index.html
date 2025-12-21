@@ -1,457 +1,195 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KAU IFC Viewer</title>
+<meta charset="utf-8">
+<title>KAU IFC Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <style>
-    :root{
-      --kau-green:#0b6b3a;
-      --bg:#ffffff;
-      --panel:#f2f3f5;
-      --panel2:#e6e7ea;
-      --text:#111;
-      --muted:#666;
-      --border:#d7d9de;
-      --btn:#e9eaee;
-      --btn-hover:#dfe1e7;
-      --danger:#b91c1c;
-    }
-
-    *{ box-sizing:border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    body{ margin:0; background:var(--bg); color:var(--text); }
-
-    .topbar{
-      background:var(--kau-green);
-      color:#fff;
-      padding:10px 14px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-weight:600;
-      letter-spacing:.2px;
-    }
-
-    .toolbar{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      padding:10px 12px;
-      background:var(--panel);
-      border-bottom:1px solid var(--border);
-    }
-
-    .toolbar .label{
-      font-size:14px;
-      color:var(--text);
-      font-weight:600;
-      white-space: nowrap;
-    }
-
-    input[type="file"]{
-      width:240px;
-      max-width:240px;
-      padding:6px;
-      background:#fff;
-      border:1px solid var(--border);
-      border-radius:8px;
-    }
-
-    .btn{
-      padding:8px 10px;
-      border:1px solid var(--border);
-      background:var(--btn);
-      border-radius:10px;
-      cursor:pointer;
-      font-weight:600;
-      white-space: nowrap;
-    }
-    .btn:hover{ background:var(--btn-hover); }
-
-    .status{
-      margin-left:auto;
-      font-size:13px;
-      color:var(--muted);
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width:45vw;
-    }
-
-    .main{
-      height: calc(100vh - 48px - 52px);
-      display:grid;
-      grid-template-columns: 280px 1fr 320px;
-      gap:10px;
-      padding:10px;
-    }
-
-    .panel{
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:10px;
-      overflow:auto;
-    }
-
-    .panel h3{
-      margin:0 0 8px 0;
-      font-size:14px;
-    }
-
-    #viewerWrap{
-      background:#fff;
-      border:1px solid var(--border);
-      border-radius:14px;
-      overflow:hidden;
-      position:relative;
-      min-height: 320px;
-    }
-
-    /* Canvas fills the center area */
-    #viewerCanvas{
-      position:absolute;
-      inset:0;
-      display:block;
-      width:100%;
-      height:100%;
-    }
-
-    .toggle{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      padding:8px;
-      background:var(--panel2);
-      border:1px solid var(--border);
-      border-radius:12px;
-      font-size:13px;
-      width: 100%;
-      margin-bottom:10px;
-    }
-
-    .floorList .btn{
-      width:100%;
-      text-align:left;
-      margin:6px 0;
-    }
-
-    .hint{
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.35;
-      margin-top:8px;
-    }
-
-    .kv{ font-size:13px; line-height:1.5; }
-    .kv b{ display:inline-block; min-width:120px; }
-
-    .divider{ height:1px; background:var(--border); margin:10px 0; }
-
-    #errorBox{
-      margin-top:10px;
-      padding:10px;
-      border:1px solid var(--border);
-      border-radius:12px;
-      background:#fff;
-      color:var(--danger);
-      font-size:12px;
-      white-space:pre-wrap;
-      word-break:break-word;
-      display:none;
-    }
-
-    #overlay{
-      position:absolute;
-      inset:0;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      background: rgba(255,255,255,0.72);
-      z-index:10;
-    }
-    #overlay .card{
-      width:min(520px, 92vw);
-      background:#fff;
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:16px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.12);
-    }
-    #overlay .title{ font-weight:800; margin-bottom:8px; }
-    #overlay .msg{ color:var(--muted); font-size:13px; line-height:1.35; }
-  </style>
+<style>
+:root{
+  --kau-green:#0b6b3a;
+  --panel:#f2f3f5;
+  --border:#d7d9de;
+  --btn:#e9eaee;
+}
+body{margin:0;font-family:system-ui;background:#fff;}
+.topbar{
+  background:var(--kau-green);
+  color:#fff;
+  padding:10px;
+  text-align:center;
+  font-weight:600;
+}
+.toolbar{
+  display:flex;
+  gap:10px;
+  padding:10px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+}
+input[type=file]{width:220px;}
+button{
+  background:var(--btn);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:6px 10px;
+  cursor:pointer;
+}
+.main{
+  display:grid;
+  grid-template-columns:260px 1fr 300px;
+  height:calc(100vh - 96px);
+  gap:10px;
+  padding:10px;
+}
+.panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px;
+}
+#viewerWrap{
+  position:relative;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+}
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+</style>
 </head>
 
 <body>
-  <div class="topbar">Architecture and Design College — King Abdulaziz University</div>
 
-  <div class="toolbar">
-    <div class="label">Load IFC</div>
-    <input id="fileInput" type="file" accept=".ifc" />
-    <button id="resetBtn" class="btn" type="button">Reset Camera</button>
-    <button id="clearBtn" class="btn" type="button">Clear Model</button>
-    <div id="status" class="status">Ready.</div>
+<div class="topbar">
+Architecture and Design College — King Abdulaziz University
+</div>
+
+<div class="toolbar">
+  <input id="fileInput" type="file" accept=".ifc">
+  <button id="resetBtn">Reset View</button>
+  <span id="status">Ready</span>
+</div>
+
+<div class="main">
+  <div class="panel">Floors (next)</div>
+
+  <div id="viewerWrap">
+    <canvas id="c"></canvas>
   </div>
 
-  <div class="main">
-    <!-- Left -->
-    <div class="panel">
-      <h3>Controls</h3>
-
-      <div class="toggle">
-        <input id="roomsOnly" type="checkbox" />
-        <label for="roomsOnly">Rooms only (we’ll connect this next)</label>
-      </div>
-
-      <div class="divider"></div>
-
-      <h3>Floors</h3>
-      <div class="floorList">
-        <button class="btn" type="button" data-floor="lower">Lower Floor</button>
-        <button class="btn" type="button" data-floor="1">Floor 1</button>
-        <button class="btn" type="button" data-floor="2">Floor 2</button>
-        <button class="btn" type="button" data-floor="3">Floor 3</button>
-        <button class="btn" type="button" data-floor="4">Floor 4</button>
-        <button class="btn" type="button" data-floor="all">Whole Building</button>
-      </div>
-
-      <div id="errorBox"></div>
-
-      <div class="hint">
-        You should see a gray grid in the center even before loading an IFC.
-      </div>
-    </div>
-
-    <!-- Middle viewer -->
-    <div id="viewerWrap">
-      <div id="overlay">
-        <div class="card">
-          <div class="title">Loading IFC…</div>
-          <div id="overlayMsg" class="msg">Parsing + building geometry…</div>
-        </div>
-      </div>
-      <canvas id="viewerCanvas"></canvas>
-    </div>
-
-    <!-- Right -->
-    <div class="panel">
-      <h3>Selected Element Info</h3>
-      <div id="info" class="kv">Click any element in the model.</div>
-      <div class="divider"></div>
-      <div class="hint">Next: full properties + random room colors + real floor filtering.</div>
-    </div>
+  <div class="panel">
+    <b>Element Info</b>
+    <div id="info">Click element</div>
   </div>
+</div>
 
-  <script type="module">
-    // ✅ Stable, CORS-safe imports for GitHub Pages
-    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js";
-    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/OrbitControls.js";
-    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/loaders/IFCLoader.js";
+<script type="module">
+/* ✅ WORKING versions */
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js";
+import { IFCLoader } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/IFCLoader.js";
 
-    const WASM_BASE = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
+/* ✅ WASM */
+const WASM_PATH = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/";
 
-    const statusEl = document.getElementById("status");
-    const infoEl = document.getElementById("info");
-    const errorBox = document.getElementById("errorBox");
-    const overlay = document.getElementById("overlay");
-    const overlayMsg = document.getElementById("overlayMsg");
+const canvas = document.getElementById("c");
+const status = document.getElementById("status");
+const info = document.getElementById("info");
 
-    const fileInput = document.getElementById("fileInput");
-    const resetBtn = document.getElementById("resetBtn");
-    const clearBtn = document.getElementById("clearBtn");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
 
-    const viewerWrap = document.getElementById("viewerWrap");
-    const canvas = document.getElementById("viewerCanvas");
+const camera = new THREE.PerspectiveCamera(60,1,0.1,2000);
+camera.position.set(15,12,15);
 
-    let scene, camera, renderer, controls;
-    let ifcLoader, ifcModel;
+const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(devicePixelRatio);
 
-    function setStatus(msg){ statusEl.textContent = msg; }
+const controls = new OrbitControls(camera,renderer.domElement);
+controls.enableDamping = true;
 
-    function showError(msg){
-      errorBox.style.display = "block";
-      errorBox.textContent = msg;
-    }
+/* Lights */
+scene.add(new THREE.AmbientLight(0xffffff,0.8));
+const dir = new THREE.DirectionalLight(0xffffff,0.6);
+dir.position.set(10,20,10);
+scene.add(dir);
 
-    function clearError(){
-      errorBox.style.display = "none";
-      errorBox.textContent = "";
-    }
+/* ✅ GRID + AXES (YOU WILL SEE THIS IMMEDIATELY) */
+scene.add(new THREE.GridHelper(100,100));
+scene.add(new THREE.AxesHelper(5));
 
-    function setOverlay(on, msg){
-      overlay.style.display = on ? "flex" : "none";
-      if (msg) overlayMsg.textContent = msg;
-    }
+/* IFC */
+const ifcLoader = new IFCLoader();
+ifcLoader.ifcManager.setWasmPath(WASM_PATH);
 
-    function escapeHtml(v){
-      return String(v).replace(/[&<>"']/g, (m) => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-      }[m]));
-    }
+let ifcModel = null;
 
-    function clearInfo(){
-      infoEl.innerHTML = "Click any element in the model.";
-    }
+function resize(){
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+resize();
 
-    function init(){
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xffffff);
+function animate(){
+  controls.update();
+  renderer.render(scene,camera);
+  requestAnimationFrame(animate);
+}
+animate();
 
-      camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
-      camera.position.set(18, 14, 18);
+/* Load IFC */
+document.getElementById("fileInput").onchange = async e=>{
+  const file = e.target.files[0];
+  if(!file) return;
 
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  status.textContent = "Loading IFC...";
+  if(ifcModel) scene.remove(ifcModel);
 
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.target.set(0, 2, 0);
-      controls.update();
+  const url = URL.createObjectURL(file);
+  ifcModel = await ifcLoader.loadAsync(url);
+  scene.add(ifcModel);
 
-      // Lights
-      scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-      dir.position.set(20, 30, 10);
-      scene.add(dir);
+  controls.reset();
+  status.textContent = "Loaded ✔";
+};
 
-      // ✅ Plane/Grid shown immediately
-      const grid = new THREE.GridHelper(100, 100, 0xcccccc, 0xdddddd);
-      grid.position.y = 0;
-      scene.add(grid);
+/* Picking */
+canvas.addEventListener("click", async e=>{
+  if(!ifcModel) return;
 
-      const axes = new THREE.AxesHelper(5);
-      axes.position.y = 0.01;
-      scene.add(axes);
+  const r = canvas.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((e.clientX-r.left)/r.width)*2-1,
+    -((e.clientY-r.top)/r.height)*2+1
+  );
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(mouse,camera);
 
-      // IFC Loader
-      ifcLoader = new IFCLoader();
-      ifcLoader.ifcManager.setWasmPath(WASM_BASE);
+  const hit = ray.intersectObject(ifcModel)[0];
+  if(!hit) return;
 
-      // Resize to container
-      const ro = new ResizeObserver(() => resizeToContainer());
-      ro.observe(viewerWrap);
-      resizeToContainer();
+  const id = ifcLoader.ifcManager.getExpressId(hit.object.geometry,hit.faceIndex);
+  const props = await ifcLoader.ifcManager.getItemProperties(ifcModel.modelID,id,true);
 
-      renderer.domElement.addEventListener("click", pick);
+  info.innerHTML = `
+    <div><b>Name:</b> ${props?.Name?.value||"-"}</div>
+    <div><b>Type:</b> ${props?.type||"-"}</div>
+    <div><b>GlobalId:</b> ${props?.GlobalId?.value||"-"}</div>
+  `;
+};
 
-      animate();
-      setStatus("Viewer ready. You should see the grid now.");
-    }
+document.getElementById("resetBtn").onclick=()=>{
+  controls.reset();
+};
+</script>
 
-    function resizeToContainer(){
-      const rect = viewerWrap.getBoundingClientRect();
-      const w = Math.max(300, Math.floor(rect.width));
-      const h = Math.max(300, Math.floor(rect.height));
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    }
-
-    function animate(){
-      controls.update();
-      renderer.render(scene, camera);
-      requestAnimationFrame(animate);
-    }
-
-    async function loadIfcFile(file){
-      clearError();
-      clearInfo();
-      setOverlay(true, "Parsing IFC… (big files can take time)");
-      setStatus("Loading IFC…");
-
-      if (ifcModel){
-        scene.remove(ifcModel);
-        ifcModel = null;
-      }
-
-      const url = URL.createObjectURL(file);
-      const model = await ifcLoader.loadAsync(url);
-
-      // center-ish
-      model.position.set(0, 0, 0);
-      ifcModel = model;
-      scene.add(ifcModel);
-
-      controls.reset();
-      controls.target.set(0, 2, 0);
-      controls.update();
-
-      setOverlay(false);
-      setStatus("Loaded ✅ Click any element.");
-    }
-
-    async function pick(event){
-      if (!ifcModel) return;
-
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-
-      const mouse = new THREE.Vector2(x, y);
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-
-      const hits = raycaster.intersectObject(ifcModel);
-      if (!hits.length) return;
-
-      const faceIndex = hits[0].faceIndex;
-      const geom = hits[0].object.geometry;
-      const expressId = ifcLoader.ifcManager.getExpressId(geom, faceIndex);
-
-      const props = await ifcLoader.ifcManager.getItemProperties(ifcModel.modelID, expressId, true);
-
-      infoEl.innerHTML = `
-        <div><b>Name:</b> ${escapeHtml(props?.Name?.value ?? "-")}</div>
-        <div><b>Type:</b> ${escapeHtml(props?.type ?? "-")}</div>
-        <div><b>GlobalId:</b> ${escapeHtml(props?.GlobalId?.value ?? "-")}</div>
-      `;
-    }
-
-    fileInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try{
-        await loadIfcFile(file);
-      }catch(err){
-        console.error(err);
-        setOverlay(false);
-        showError("IFC load failed:\n" + (err?.stack || err?.message || String(err)));
-        setStatus("Failed ❌");
-      }
-    });
-
-    resetBtn.addEventListener("click", () => {
-      controls.reset();
-      controls.target.set(0, 2, 0);
-      controls.update();
-      setStatus("Camera reset.");
-    });
-
-    clearBtn.addEventListener("click", () => {
-      clearError();
-      setOverlay(false);
-      if (ifcModel){
-        scene.remove(ifcModel);
-        ifcModel = null;
-      }
-      clearInfo();
-      setStatus("Model cleared.");
-    });
-
-    // placeholders
-    document.getElementById("roomsOnly").addEventListener("change", (e) => {
-      setStatus(e.target.checked ? "Rooms only: ON (we’ll implement filtering next)" : "Rooms only: OFF");
-    });
-
-    document.querySelectorAll("[data-floor]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        setStatus(`Floor filter: ${btn.dataset.floor} (we’ll connect storeys next)`);
-      });
-    });
-
-    init();
-  </script>
 </body>
 </html>
