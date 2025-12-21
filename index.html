@@ -1,11 +1,84 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8" />
   <title>KAU IFC Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Three.js + IFC.js -->
+  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
+  <script src="https://unpkg.com/web-ifc@0.0.57/web-ifc-api.js"></script>
+  <script src="https://unpkg.com/ifc-viewer@1.0.250/dist/ifc-viewer.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #0b0f0d;
+      color: white;
+    }
+
+    header {
+      height: 60px;
+      background: #006C35;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    #viewer {
+      width: 100%;
+      height: calc(100% - 60px);
+    }
+
+    #fileInput {
+      position: absolute;
+      top: 70px;
+      left: 10px;
+      z-index: 10;
+      background: #111;
+      color: white;
+      padding: 6px;
+      border-radius: 4px;
+    }
+  </style>
 </head>
+
 <body>
-  <h1>KAU IFC Viewer</h1>
-  <p>GitHub Pages is working ✅</p>
+
+  <header>
+    Architecture and Design College — King Abdulaziz University
+  </header>
+
+  <input type="file" id="fileInput" accept=".ifc" />
+
+  <div id="viewer"></div>
+
+  <script>
+    const container = document.getElementById("viewer");
+    const viewer = new IfcViewerAPI({ container });
+
+    viewer.axes.setAxes();
+    viewer.grid.setGrid();
+
+    viewer.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.57/");
+
+    const fileInput = document.getElementById("fileInput");
+
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      await viewer.IFC.loadIfcUrl(url);
+      viewer.context.fitToFrame();
+    });
+  </script>
+
 </body>
 </html>
