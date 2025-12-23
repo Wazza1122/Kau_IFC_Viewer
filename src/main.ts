@@ -1,108 +1,139 @@
-import * as THREE from "three";
-import * as OBC from "@thatopen/components";
 import "./style.css";
 
+import * as THREE from "three";
+import { Components } from "@thatopen/components";
+import { FragmentsManager } from "@thatopen/fragments";
+
+const app = document.getElementById("app") as HTMLDivElement;
+
+app.innerHTML = `
+  <div class="topbar">Architecture and Design College — King Abdulaziz University</div>
+  <div class="toolbar">
+    <div class="label">Load IFC</div>
+    <input id="fileInput" type="file" accept=".ifc" />
+    <button id="resetBtn" class="btn" type="button">Reset View</button>
+    <button id="clearBtn" class="btn" type="button">Clear Model</button>
+    <div id="status" class="status">Ready.</div>
+  </div>
+  <div id="viewerWrap">
+    <div id="viewer"></div>
+  </div>
+`;
+
 const statusEl = document.getElementById("status") as HTMLDivElement;
-const infoEl = document.getElementById("info") as HTMLDivElement;
+const viewerEl = document.getElementById("viewer") as HTMLDivElement;
 const fileInput = document.getElementById("fileInput") as HTMLInputElement;
 const resetBtn = document.getElementById("resetBtn") as HTMLButtonElement;
-
-const container = document.getElementById("container") as HTMLDivElement;
+const clearBtn = document.getElementById("clearBtn") as HTMLButtonElement;
 
 function setStatus(msg: string) {
   statusEl.textContent = msg;
 }
 
-function escapeHtml(v: unknown) {
-  return String(v).replace(/[&<>"']/g, (m) => {
-    const map: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;",
-    };
-    return map[m] ?? m;
-  });
-}
+// --- ThatOpen Components setup ---
+const components = new Components();
 
-// ---- ThatOpen world ----
-const components = new OBC.Components();
+// Scene
+const sceneComponent = components.scene;
+sceneComponent.setup();
+const scene = sceneComponent.get();
 
-const worlds = components.get(OBC.Worlds);
-const world = worlds.create<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBC.SimpleRenderer>();
+// Renderer
+const rendererComponent = components.renderer;
+rendererComponent.setup(viewerEl);
+const renderer = rendererComponent.get();
 
-world.scene = new OBC.SimpleScene(components);
-world.scene.setup();
-world.scene.three.background = new THREE.Color(0xffffff);
+// Camera
+const cameraComponent = components.camera;
+cameraComponent.setup(renderer);
+const camera = cameraComponent.get();
 
-world.renderer = new OBC.SimpleRenderer(components, container);
+// Controls
+const raycastersComponent = components.raycasters;
+raycastersComponent.setup(renderer);
 
-world.camera = new OBC.OrthoPerspectiveCamera(components);
-await world.camera.controls.setLookAt(60, 25, 35, 0, 0, 0);
+// Lights
+const lightsComponent = components.lights;
+lightsComponent.setup();
+lightsComponent.get().addDefaultLights(scene);
 
+// Grid (this is your plane)
+const grid = new THREE.GridHelper(200, 50);
+scene.add(grid);
+
+// Background white
+renderer.setClearColor(0xffffff, 1);
+
+// Fragments manager
+const fragments = new FragmentsManager(components);
+
+// Animation loop
 components.init();
-
-// ---- IFC Loader ----
-const ifcLoader = components.get(OBC.IfcLoader);
-await ifcLoader.setup({
-  autoSetWasm: false,
-  wasm: {
-    path: "https://unpkg.com/web-ifc@0.0.72/",
-    absolute: true,
-  },
+rendererComponent.setAnimationLoop(() => {
+  components.update();
+  renderer.render(scene, camera);
 });
 
-setStatus("Ready. Load an IFC.");
-infoEl.textContent = "Double-click any element after loading.";
+setStatus("Viewer ready. Choose an IFC file.");
+
+// --- Load IFC ---
+let loadedGroups: THREE.Object3D[] = [];
+
+async function loadIfcFile(file: File) {
+  setStatus("Loading IFC…");
+
+  // Convert file to ArrayBuffer
+  const buffer = await file.arrayBuffer();
+
+  // Load fragments
+  const group = await fragments.load(buffer);
+
+  if (!group) throw new Error("Fragments loader returned null.");
+
+  scene.add(group);
+  loadedGroups.push(group);
+
+  // Fit view roughly
+  const box = new THREE.Box3().setFromObject(group);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  camera.position.set(center.x + size.x, center.y + size.y, center.z + size.z);
+  camera.lookAt(center);
+
+  setStatus("Loaded ✅");
+}
+
+function clearModel() {
+  for (const g of loadedGroups) {
+    scene.remove(g);
+  }
+  loadedGroups = [];
+  setStatus("Model cleared.");
+}
 
 fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
 
-  setStatus("Loading IFC…");
-  infoEl.textContent = "Loading…";
-
-  // Clear scene objects except lights/camera internals
-  const keep: THREE.Object3D[] = [];
-  world.scene.three.children.forEach((c) => keep.push(c));
-  // (Simple clear: recreate scene)
-  world.scene.three.clear();
-  world.scene.three.background = new THREE.Color(0xffffff);
-
-  const buf = new Uint8Array(await file.arrayBuffer());
-  const model = await ifcLoader.load(buf, false, file.name);
-
-  world.scene.three.add(model);
-  await world.camera.controls.setLookAt(60, 25, 35, 0, 0, 0);
-
-  setStatus("Loaded ✅ Double-click to pick.");
-  infoEl.textContent = "Double-click any element in the model.";
+  try {
+    await loadIfcFile(file);
+  } catch (e: any) {
+    console.error(e);
+    setStatus("Load failed ❌");
+    alert("IFC load failed:\n" + (e?.message || String(e)));
+  }
 });
 
-resetBtn.addEventListener("click", async () => {
-  await world.camera.controls.setLookAt(60, 25, 35, 0, 0, 0);
+resetBtn.addEventListener("click", () => {
+  camera.position.set(10, 10, 10);
+  camera.lookAt(0, 0, 0);
   setStatus("View reset.");
 });
 
-// ---- Picking (double click) ----
-const raycasters = components.get(OBC.Raycasters);
-const caster = raycasters.get(world);
-
-container.addEventListener("dblclick", async () => {
-  try {
-    const hit = (await caster.castRay()) as any;
-    if (!hit) return;
-
-    // hit has localId and modelID-like info depending on build
-    const localId = hit.localId ?? hit.id ?? "-";
-    const modelId = hit.fragments?.modelId ?? hit.modelId ?? "-";
-
-    infoEl.innerHTML =
-      "<div><b>Model:</b> " + escapeHtml(modelId) + "</div>" +
-      "<div><b>Local ID:</b> " + escapeHtml(localId) + "</div>";
-
-  } catch {
-    // ignore
-  }
+clearBtn.addEventListener("click", () => {
+  clearModel();
 });
